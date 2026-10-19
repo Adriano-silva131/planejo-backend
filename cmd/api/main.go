@@ -1,9 +1,11 @@
 package main
 
 import (
-	"log"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -15,9 +17,21 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = io.WriteString(w, `{"status":"ok"}`)
 	})
 
-	log.Printf("API ouvindo na porta %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	slog.Info("API ouvindo", "port", port)
+	if err := srv.ListenAndServe(); err != nil {
+		slog.Error("servidor encerrado", "err", err)
+		os.Exit(1)
+	}
 }
