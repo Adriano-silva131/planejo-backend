@@ -1,0 +1,93 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - cyclop
+    - depguard
+    - errorlint
+    - funlen
+    - gocognit
+    - gocritic
+    - gosec
+    - nestif
+    - nilerr
+    - noctx
+    - revive
+    - unparam
+
+  settings:
+    funlen:
+      lines: 60
+      statements: 40
+      ignore-comments: true
+
+    gocognit:
+      min-complexity: 15
+
+    cyclop:
+      max-complexity: 12
+
+    nestif:
+      min-complexity: 4
+
+    revive:
+      rules:
+        - name: file-length-limit
+          arguments:
+            - max: 300
+              skipComments: true
+              skipBlankLines: true
+        - name: function-result-limit
+          arguments: [3]
+        - name: argument-limit
+          arguments: [5]
+
+    depguard:
+      rules:
+        domain:
+          files:
+            - "**/internal/*/domain/**"
+          deny:
+            - pkg: gorm.io
+              desc: domain não conhece o banco; use interfaces de repositório
+            - pkg: net/http
+              desc: domain não conhece HTTP
+            - pkg: github.com/Adriano-silva131/planejo-backend/internal/platform
+              desc: domain não depende de infraestrutura
+        shared:
+          files:
+            - "**/internal/shared/**"
+          deny:
+            - pkg: gorm.io
+              desc: shared é domínio puro
+            - pkg: net/http
+              desc: shared é domínio puro
+            - pkg: github.com/Adriano-silva131/planejo-backend/internal/platform
+              desc: shared não depende de infraestrutura
+        no-junk-packages:
+          files:
+            - $all
+          deny:
+            - pkg: github.com/Adriano-silva131/planejo-backend/internal/utils
+              desc: dê ao pacote o nome do que ele faz
+            - pkg: github.com/Adriano-silva131/planejo-backend/internal/helpers
+              desc: dê ao pacote o nome do que ele faz
+            - pkg: github.com/Adriano-silva131/planejo-backend/internal/common
+              desc: dê ao pacote o nome do que ele faz
+        app:
+          files:
+            - "**/internal/*/app/**"
+          deny:
+            - pkg: gorm.io
+              desc: casos de uso falam com o banco só pelas interfaces do domain
+            - pkg: net/http
+              desc: casos de uso não conhecem HTTP
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocognit
+          - revive
