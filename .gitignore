@@ -1,0 +1,14 @@
+# Binários
+/bin/
+*.exe
+*.test
+*.out
+
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
