@@ -75,6 +75,14 @@ linters:
               desc: dê ao pacote o nome do que ele faz
             - pkg: github.com/Adriano-silva131/planejo-backend/internal/common
               desc: dê ao pacote o nome do que ele faz
+        huma:
+          files:
+            - $all
+            - "!**/internal/*/http/**"
+            - "!**/internal/platform/httpx/**"
+          deny:
+            - pkg: github.com/danielgtaylor/huma
+              desc: huma só na borda HTTP (internal/<domínio>/http e platform/httpx)
         app:
           files:
             - "**/internal/*/app/**"
