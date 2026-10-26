@@ -1,0 +1,16 @@
+root = "."
+tmp_dir = "tmp"
+env_files = [".env"]
+
+[build]
+  cmd = "go build -o ./tmp/api ./cmd/api"
+  entrypoint = ["./tmp/api"]
+  include_ext = ["go", "sql"]
+  exclude_dir = ["tmp", ".git", ".idea", ".vscode"]
+  exclude_regex = ["_test\\.go$"]
+  log = "build-errors.log"
+  send_interrupt = true
+  kill_delay = "5s"
+
+[misc]
+  clean_on_exit = true

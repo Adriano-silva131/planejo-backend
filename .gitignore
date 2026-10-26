@@ -4,6 +4,7 @@
 *.exe
 *.test
 *.out
+/tmp/
 
 # Ambiente
 .env
