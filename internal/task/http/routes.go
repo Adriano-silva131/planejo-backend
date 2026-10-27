@@ -7,7 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
-	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/app"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
@@ -87,7 +87,7 @@ type listOutput struct {
 }
 
 func (h handler) create(ctx context.Context, in *createInput) (*taskOutput, error) {
-	userID, err := currentUser(ctx)
+	userID, err := httpx.CurrentUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (h handler) create(ctx context.Context, in *createInput) (*taskOutput, erro
 }
 
 func (h handler) list(ctx context.Context, in *listInput) (*listOutput, error) {
-	userID, err := currentUser(ctx)
+	userID, err := httpx.CurrentUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ type areasOutput struct {
 }
 
 func (h handler) areas(ctx context.Context, _ *struct{}) (*areasOutput, error) {
-	userID, err := currentUser(ctx)
+	userID, err := httpx.CurrentUser(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -191,17 +191,9 @@ func parseDetails(f taskFields) (domain.Details, error) {
 	return f.details()
 }
 
-func currentUser(ctx context.Context) (uuid.UUID, error) {
-	user, ok := auth.UserFrom(ctx)
-	if !ok {
-		return uuid.Nil, huma.Error401Unauthorized("")
-	}
-	return user.ID, nil
-}
-
 // target returns the user and the task id from the path.
 func target(ctx context.Context, rawID string) (userID, id uuid.UUID, err error) {
-	userID, err = currentUser(ctx)
+	userID, err = httpx.CurrentUser(ctx)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}

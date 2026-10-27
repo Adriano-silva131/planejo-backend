@@ -86,6 +86,17 @@ func TestAuthenticatedRoutePutsUserInContext(t *testing.T) {
 	assert.JSONEq(t, `{"id":"`+userA.ID.String()+`","email":"a@example.com"}`, rec.Body.String())
 }
 
+func TestCurrentUser(t *testing.T) {
+	id, err := CurrentUser(auth.WithUser(t.Context(), userA))
+	require.NoError(t, err)
+	assert.Equal(t, userA.ID, id)
+
+	_, err = CurrentUser(t.Context())
+	var status huma.StatusError
+	require.ErrorAs(t, err, &status)
+	assert.Equal(t, http.StatusUnauthorized, status.GetStatus())
+}
+
 func TestPublicRouteNeedsNoToken(t *testing.T) {
 	rec := newTestServer(t, false).get(t, "/v1/items/1")
 
