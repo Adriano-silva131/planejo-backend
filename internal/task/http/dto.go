@@ -6,6 +6,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -108,7 +109,7 @@ func (f taskFields) schedule() (domain.Schedule, error) {
 		}
 		return domain.RecurringSchedule{Weekdays: days, Duration: duration, Period: domain.Period(f.Period)}, nil
 	case domain.OneOff:
-		deadline, err := parseDate(f.Deadline)
+		deadline, err := calendar.ParseOptionalDate(f.Deadline)
 		if err != nil {
 			return nil, err
 		}
@@ -122,38 +123,31 @@ func (f taskFields) fixedSchedule() (domain.Schedule, error) {
 	if err != nil {
 		return nil, err
 	}
-	date, err := parseDate(f.Date)
+	date, err := calendar.ParseOptionalDate(f.Date)
 	if err != nil {
 		return nil, err
 	}
-	start, err := domain.ParseTimeOfDay(f.Start)
+	start, err := calendar.ParseTimeOfDay(f.Start)
 	if err != nil {
 		return nil, err
 	}
-	end, err := domain.ParseTimeOfDay(f.End)
+	end, err := calendar.ParseTimeOfDay(f.End)
 	if err != nil {
 		return nil, err
 	}
 	return domain.FixedSchedule{Weekdays: days, Date: date, Start: start, End: end}, nil
 }
 
-func parseWeekdays(names []string) (domain.Weekdays, error) {
+func parseWeekdays(names []string) (calendar.Weekdays, error) {
 	days := make([]time.Weekday, 0, len(names))
 	for _, name := range names {
 		i := slices.Index(weekdayNames[:], name)
 		if i < 0 {
-			return 0, domain.ErrInvalidWeekday
+			return 0, calendar.ErrInvalidWeekday
 		}
 		days = append(days, time.Weekday(i))
 	}
-	return domain.NewWeekdays(days...)
-}
-
-func parseDate(s string) (domain.Date, error) {
-	if s == "" {
-		return domain.Date{}, nil
-	}
-	return domain.ParseDate(s)
+	return calendar.NewWeekdays(days...)
 }
 
 func toBody(t domain.Task) taskBody {
@@ -166,7 +160,7 @@ func toBody(t domain.Task) taskBody {
 	switch s := t.Schedule.(type) {
 	case domain.FixedSchedule:
 		f.Weekdays = weekdayList(s.Weekdays)
-		f.Date = dateString(s.Date)
+		f.Date = s.Date.String()
 		f.Start, f.End = s.Start.String(), s.End.String()
 	case domain.RecurringSchedule:
 		f.Weekdays = weekdayList(s.Weekdays)
@@ -180,17 +174,10 @@ func toBody(t domain.Task) taskBody {
 	return taskBody{ID: t.ID.String(), taskFields: f, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 }
 
-func weekdayList(w domain.Weekdays) []string {
+func weekdayList(w calendar.Weekdays) []string {
 	var names []string
 	for _, d := range w.Days() {
 		names = append(names, weekdayNames[d])
 	}
 	return names
-}
-
-func dateString(d domain.Date) string {
-	if d.IsZero() {
-		return ""
-	}
-	return d.String()
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -43,6 +44,16 @@ func (r *fakeRepo) List(_ context.Context, _ uuid.UUID, offset, limit int) ([]do
 	return nil, 0, nil
 }
 
+func (r *fakeRepo) All(_ context.Context, userID uuid.UUID) ([]domain.Task, error) {
+	var out []domain.Task
+	for _, t := range r.tasks {
+		if t.UserID == userID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
 func (r *fakeRepo) Update(_ context.Context, t domain.Task) (domain.Task, error) {
 	r.updateCalled = true
 	r.tasks[t.ID] = t
@@ -56,7 +67,7 @@ func (r *fakeRepo) Delete(_ context.Context, _, id uuid.UUID) error {
 
 func gym(t *testing.T) domain.Details {
 	t.Helper()
-	days, err := domain.NewWeekdays(time.Monday, time.Wednesday)
+	days, err := calendar.NewWeekdays(time.Monday, time.Wednesday)
 	require.NoError(t, err)
 	return domain.Details{
 		Title:    "Academia",

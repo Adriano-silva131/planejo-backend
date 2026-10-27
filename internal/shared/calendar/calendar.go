@@ -1,4 +1,6 @@
-package domain
+// Package calendar holds calendar values without time zone: days of the week,
+// wall-clock times and dates, all read in the user's time zone.
+package calendar
 
 import (
 	"fmt"
@@ -59,7 +61,7 @@ func ParseTimeOfDay(s string) (TimeOfDay, error) {
 	return NewTimeOfDay(t.Hour(), t.Minute())
 }
 
-func (t TimeOfDay) valid() bool {
+func (t TimeOfDay) Valid() bool {
 	return t >= 0 && t < minutesPerDay
 }
 
@@ -76,6 +78,11 @@ func NewDate(year int, month time.Month, day int) Date {
 	return Date{t: time.Date(year, month, day, 0, 0, 0, 0, time.UTC)}
 }
 
+// DateOf returns the day of t in t's location.
+func DateOf(t time.Time) Date {
+	return NewDate(t.Date())
+}
+
 // ParseDate reads the "2006-01-02" format.
 func ParseDate(s string) (Date, error) {
 	t, err := time.Parse(time.DateOnly, s)
@@ -83,6 +90,14 @@ func ParseDate(s string) (Date, error) {
 		return Date{}, ErrInvalidDate
 	}
 	return Date{t: t}, nil
+}
+
+// ParseOptionalDate is ParseDate where an empty string is the zero Date.
+func ParseOptionalDate(s string) (Date, error) {
+	if s == "" {
+		return Date{}, nil
+	}
+	return ParseDate(s)
 }
 
 func (d Date) IsZero() bool {
@@ -94,6 +109,31 @@ func (d Date) Time() time.Time {
 	return d.t
 }
 
+// String formats the "2006-01-02" layout; the zero Date is empty.
 func (d Date) String() string {
+	if d.IsZero() {
+		return ""
+	}
 	return d.t.Format(time.DateOnly)
+}
+
+func (d Date) Weekday() time.Weekday {
+	return d.t.Weekday()
+}
+
+func (d Date) AddDays(n int) Date {
+	return Date{t: d.t.AddDate(0, 0, n)}
+}
+
+func (d Date) Before(other Date) bool {
+	return d.t.Before(other.t)
+}
+
+func (d Date) After(other Date) bool {
+	return d.t.After(other.t)
+}
+
+// StartOfWeek returns the Monday of d's week.
+func (d Date) StartOfWeek() Date {
+	return d.AddDays(-(int(d.Weekday()) + 6) % 7)
 }
