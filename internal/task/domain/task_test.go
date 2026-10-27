@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"strings"
 	"testing"
 	"time"
@@ -12,16 +13,16 @@ import (
 
 var testUserID = uuid.MustParse("6f1b5d1e-6a3c-4a8e-9a5b-2f1d7c3e8b90")
 
-func weekdays(t *testing.T, days ...time.Weekday) Weekdays {
+func weekdays(t *testing.T, days ...time.Weekday) calendar.Weekdays {
 	t.Helper()
-	w, err := NewWeekdays(days...)
+	w, err := calendar.NewWeekdays(days...)
 	require.NoError(t, err)
 	return w
 }
 
-func clock(t *testing.T, s string) TimeOfDay {
+func clock(t *testing.T, s string) calendar.TimeOfDay {
 	t.Helper()
-	tod, err := ParseTimeOfDay(s)
+	tod, err := calendar.ParseTimeOfDay(s)
 	require.NoError(t, err)
 	return tod
 }
@@ -56,7 +57,7 @@ func report() Details {
 	return Details{
 		Title:    "Entregar relatório",
 		Priority: Medium,
-		Schedule: OneOffSchedule{Duration: 3 * time.Hour, Deadline: NewDate(2026, time.October, 30)},
+		Schedule: OneOffSchedule{Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)},
 	}
 }
 
@@ -91,7 +92,7 @@ func TestNewTrimsTitleAndArea(t *testing.T) {
 
 func TestNewAcceptsFixedTaskOnADate(t *testing.T) {
 	d := work(t)
-	d.Schedule = FixedSchedule{Date: NewDate(2026, time.November, 5), Start: clock(t, "15:00"), End: clock(t, "16:00")}
+	d.Schedule = FixedSchedule{Date: calendar.NewDate(2026, time.November, 5), Start: clock(t, "15:00"), End: clock(t, "16:00")}
 
 	_, err := New(testUserID, d)
 
@@ -115,7 +116,7 @@ func TestNewRejectsInvalidDetails(t *testing.T) {
 		"unknown period":      {setRecurringPeriod(t, "dawn"), ErrInvalidPeriod},
 		"one-off no deadline": {func(d *Details) { d.Schedule = OneOffSchedule{Duration: time.Hour} }, ErrDeadlineRequired},
 		"one-off too long": {func(d *Details) {
-			d.Schedule = OneOffSchedule{Duration: 101 * time.Hour, Deadline: NewDate(2026, time.October, 30)}
+			d.Schedule = OneOffSchedule{Duration: 101 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)}
 		}, ErrInvalidTotalDuration},
 	}
 
@@ -145,7 +146,7 @@ func setRecurringPeriod(t *testing.T, period Period) func(*Details) {
 
 func TestNewRejectsInvalidFixedTasks(t *testing.T) {
 	mon := weekdays(t, time.Monday)
-	day := NewDate(2026, time.November, 5)
+	day := calendar.NewDate(2026, time.November, 5)
 	cases := map[string]struct {
 		priority Priority
 		schedule FixedSchedule
@@ -156,7 +157,7 @@ func TestNewRejectsInvalidFixedTasks(t *testing.T) {
 		"days and date":     {"", FixedSchedule{Weekdays: mon, Date: day, Start: clock(t, "09:00"), End: clock(t, "10:00")}, ErrFixedTaskDays},
 		"end before start":  {"", FixedSchedule{Weekdays: mon, Start: clock(t, "10:00"), End: clock(t, "09:00")}, ErrInvalidTimeRange},
 		"empty range":       {"", FixedSchedule{Weekdays: mon, Start: clock(t, "10:00"), End: clock(t, "10:00")}, ErrInvalidTimeRange},
-		"time out of range": {"", FixedSchedule{Weekdays: mon, Start: clock(t, "09:00"), End: 24 * 60}, ErrInvalidTime},
+		"time out of range": {"", FixedSchedule{Weekdays: mon, Start: clock(t, "09:00"), End: 24 * 60}, calendar.ErrInvalidTime},
 	}
 
 	for name, tc := range cases {

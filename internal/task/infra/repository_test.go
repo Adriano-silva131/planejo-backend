@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -26,9 +27,9 @@ func newRepo(t *testing.T) *Repository {
 	return NewRepository(dbtest.Tx(t))
 }
 
-func weekdays(t *testing.T, days ...time.Weekday) domain.Weekdays {
+func weekdays(t *testing.T, days ...time.Weekday) calendar.Weekdays {
 	t.Helper()
-	w, err := domain.NewWeekdays(days...)
+	w, err := calendar.NewWeekdays(days...)
 	require.NoError(t, err)
 	return w
 }
@@ -40,7 +41,7 @@ func details(t *testing.T) map[string]domain.Details {
 			Weekdays: weekdays(t, time.Monday, time.Friday), Start: 9 * 60, End: 18 * 60,
 		}},
 		"fixed on date": {Title: "Consulta", Schedule: domain.FixedSchedule{
-			Date: domain.NewDate(2026, time.November, 5), Start: 15 * 60, End: 16 * 60,
+			Date: calendar.NewDate(2026, time.November, 5), Start: 15 * 60, End: 16 * 60,
 		}},
 		"recurring": {Title: "Academia", Area: "Saúde", Priority: domain.High, Schedule: domain.RecurringSchedule{
 			Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
@@ -49,7 +50,7 @@ func details(t *testing.T) map[string]domain.Details {
 			Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
 		}},
 		"one-off": {Title: "Relatório", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
-			Duration: 3 * time.Hour, Deadline: domain.NewDate(2026, time.October, 30), Period: domain.Afternoon,
+			Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
 		}},
 	}
 }

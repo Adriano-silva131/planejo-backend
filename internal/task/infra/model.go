@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -17,7 +18,7 @@ type taskModel struct {
 	Area            string
 	Kind            string
 	Priority        *string
-	Weekdays        domain.Weekdays
+	Weekdays        calendar.Weekdays
 	Date            *time.Time
 	StartMinute     *int
 	EndMinute       *int
@@ -92,8 +93,8 @@ func (m taskModel) schedule() (domain.Schedule, error) {
 		return domain.FixedSchedule{
 			Weekdays: m.Weekdays,
 			Date:     dateOf(m.Date),
-			Start:    domain.TimeOfDay(value(m.StartMinute)),
-			End:      domain.TimeOfDay(value(m.EndMinute)),
+			Start:    calendar.TimeOfDay(value(m.StartMinute)),
+			End:      calendar.TimeOfDay(value(m.EndMinute)),
 		}, nil
 	case domain.Recurring:
 		return domain.RecurringSchedule{
@@ -128,18 +129,18 @@ func value[T any](p *T) T {
 	return *p
 }
 
-func optionalDate(d domain.Date) *time.Time {
+func optionalDate(d calendar.Date) *time.Time {
 	if d.IsZero() {
 		return nil
 	}
 	return new(d.Time())
 }
 
-func dateOf(t *time.Time) domain.Date {
+func dateOf(t *time.Time) calendar.Date {
 	if t == nil {
-		return domain.Date{}
+		return calendar.Date{}
 	}
-	return domain.NewDate(t.Date())
+	return calendar.NewDate(t.Date())
 }
 
 func minutes(n *int64) time.Duration {

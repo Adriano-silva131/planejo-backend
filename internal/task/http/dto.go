@@ -6,6 +6,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -126,34 +127,34 @@ func (f taskFields) fixedSchedule() (domain.Schedule, error) {
 	if err != nil {
 		return nil, err
 	}
-	start, err := domain.ParseTimeOfDay(f.Start)
+	start, err := calendar.ParseTimeOfDay(f.Start)
 	if err != nil {
 		return nil, err
 	}
-	end, err := domain.ParseTimeOfDay(f.End)
+	end, err := calendar.ParseTimeOfDay(f.End)
 	if err != nil {
 		return nil, err
 	}
 	return domain.FixedSchedule{Weekdays: days, Date: date, Start: start, End: end}, nil
 }
 
-func parseWeekdays(names []string) (domain.Weekdays, error) {
+func parseWeekdays(names []string) (calendar.Weekdays, error) {
 	days := make([]time.Weekday, 0, len(names))
 	for _, name := range names {
 		i := slices.Index(weekdayNames[:], name)
 		if i < 0 {
-			return 0, domain.ErrInvalidWeekday
+			return 0, calendar.ErrInvalidWeekday
 		}
 		days = append(days, time.Weekday(i))
 	}
-	return domain.NewWeekdays(days...)
+	return calendar.NewWeekdays(days...)
 }
 
-func parseDate(s string) (domain.Date, error) {
+func parseDate(s string) (calendar.Date, error) {
 	if s == "" {
-		return domain.Date{}, nil
+		return calendar.Date{}, nil
 	}
-	return domain.ParseDate(s)
+	return calendar.ParseDate(s)
 }
 
 func toBody(t domain.Task) taskBody {
@@ -180,7 +181,7 @@ func toBody(t domain.Task) taskBody {
 	return taskBody{ID: t.ID.String(), taskFields: f, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 }
 
-func weekdayList(w domain.Weekdays) []string {
+func weekdayList(w calendar.Weekdays) []string {
 	var names []string
 	for _, d := range w.Days() {
 		names = append(names, weekdayNames[d])
@@ -188,7 +189,7 @@ func weekdayList(w domain.Weekdays) []string {
 	return names
 }
 
-func dateString(d domain.Date) string {
+func dateString(d calendar.Date) string {
 	if d.IsZero() {
 		return ""
 	}

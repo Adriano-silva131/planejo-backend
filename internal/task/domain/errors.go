@@ -16,10 +16,7 @@ var (
 
 	ErrFixedTaskDays    = invalid("fixed_task_days", "Tarefa fixa precisa de dias da semana ou de uma data, não dos dois.")
 	ErrWeekdaysRequired = invalid("task_weekdays_required", "Escolha ao menos um dia da semana.")
-	ErrInvalidWeekday   = invalid("task_invalid_weekday", "Dia da semana inválido.")
-	ErrInvalidTime      = invalid("task_invalid_time", "Horário inválido: use o formato HH:MM.")
 	ErrInvalidTimeRange = invalid("task_invalid_time_range", "O horário de término precisa ser depois do início.")
-	ErrInvalidDate      = invalid("task_invalid_date", "Data inválida: use o formato AAAA-MM-DD.")
 	ErrInvalidPeriod    = invalid("task_invalid_period", "Período inválido: use manhã, tarde ou noite.")
 	ErrDeadlineRequired = invalid("one_off_task_deadline", "Tarefa pontual precisa de prazo.")
 

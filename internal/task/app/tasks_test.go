@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -56,7 +57,7 @@ func (r *fakeRepo) Delete(_ context.Context, _, id uuid.UUID) error {
 
 func gym(t *testing.T) domain.Details {
 	t.Helper()
-	days, err := domain.NewWeekdays(time.Monday, time.Wednesday)
+	days, err := calendar.NewWeekdays(time.Monday, time.Wednesday)
 	require.NoError(t, err)
 	return domain.Details{
 		Title:    "Academia",

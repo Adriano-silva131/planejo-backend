@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
+)
 
 type Kind string
 
@@ -37,10 +41,10 @@ type Schedule interface {
 
 // FixedSchedule repeats on Weekdays or happens once on Date, never both.
 type FixedSchedule struct {
-	Weekdays Weekdays
-	Date     Date
-	Start    TimeOfDay
-	End      TimeOfDay
+	Weekdays calendar.Weekdays
+	Date     calendar.Date
+	Start    calendar.TimeOfDay
+	End      calendar.TimeOfDay
 }
 
 func (FixedSchedule) Kind() Kind { return Fixed }
@@ -49,8 +53,8 @@ func (s FixedSchedule) validate() error {
 	if s.Weekdays.IsEmpty() == s.Date.IsZero() {
 		return ErrFixedTaskDays
 	}
-	if !s.Start.valid() || !s.End.valid() {
-		return ErrInvalidTime
+	if !s.Start.Valid() || !s.End.Valid() {
+		return calendar.ErrInvalidTime
 	}
 	if s.End <= s.Start {
 		return ErrInvalidTimeRange
@@ -60,7 +64,7 @@ func (s FixedSchedule) validate() error {
 
 // RecurringSchedule takes Duration on each of the Weekdays.
 type RecurringSchedule struct {
-	Weekdays Weekdays
+	Weekdays calendar.Weekdays
 	Duration time.Duration
 	Period   Period
 }
@@ -80,7 +84,7 @@ func (s RecurringSchedule) validate() error {
 // OneOffSchedule takes Duration in total, done by the end of Deadline.
 type OneOffSchedule struct {
 	Duration time.Duration
-	Deadline Date
+	Deadline calendar.Date
 	Period   Period
 }
 

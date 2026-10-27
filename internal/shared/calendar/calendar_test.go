@@ -1,4 +1,4 @@
-package domain
+package calendar
 
 import (
 	"testing"
@@ -58,4 +58,31 @@ func TestDateRejectsInvalidValues(t *testing.T) {
 
 		assert.ErrorIs(t, err, ErrInvalidDate, s)
 	}
+}
+
+func TestDateArithmetic(t *testing.T) {
+	thursday := NewDate(2026, time.October, 29)
+
+	assert.Equal(t, time.Thursday, thursday.Weekday())
+	assert.Equal(t, NewDate(2026, time.November, 2), thursday.AddDays(4))
+	assert.True(t, thursday.Before(thursday.AddDays(1)))
+	assert.True(t, thursday.After(thursday.AddDays(-1)))
+	assert.False(t, thursday.After(thursday))
+}
+
+func TestStartOfWeekIsMonday(t *testing.T) {
+	monday := NewDate(2026, time.October, 26)
+
+	for offset := range 7 {
+		assert.Equal(t, monday, monday.AddDays(offset).StartOfWeek(), monday.AddDays(offset).Weekday())
+	}
+	assert.Equal(t, NewDate(2026, time.November, 2), NewDate(2026, time.November, 2).StartOfWeek())
+}
+
+func TestDateOfUsesTheTimeLocation(t *testing.T) {
+	saoPaulo := time.FixedZone("BRT", -3*60*60)
+	instant := time.Date(2026, time.October, 27, 1, 0, 0, 0, time.UTC)
+
+	assert.Equal(t, NewDate(2026, time.October, 26), DateOf(instant.In(saoPaulo)))
+	assert.Equal(t, NewDate(2026, time.October, 27), DateOf(instant))
 }
