@@ -167,3 +167,29 @@ func TestDeletingTheTaskRemovesItsCheckIns(t *testing.T) {
 
 	assert.Empty(t, f.list(userA, domain.Filter{}))
 }
+
+func TestSchedules(t *testing.T) {
+	f := newFixture(t)
+	task, other := f.task(userA), f.task(userB)
+	mon, err := calendar.NewWeekdays(time.Monday)
+	require.NoError(t, err)
+	monWed, err := calendar.NewWeekdays(time.Monday, time.Wednesday)
+	require.NoError(t, err)
+
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{Until: monday.AddDays(7), Weekdays: monWed}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{Until: monday, Weekdays: mon}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{Until: monday, Weekdays: monWed}),
+		"a second change in the same week keeps the first")
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userB, other, domain.PastSchedule{Until: monday}))
+
+	got, err := f.repo.Schedules(t.Context(), userA)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[uuid.UUID][]domain.PastSchedule{task: {
+		{Until: monday, Weekdays: mon},
+		{Until: monday.AddDays(7), Weekdays: monWed},
+	}}, got)
+	// Last: the foreign key violation aborts the test's transaction.
+	assert.ErrorIs(t, f.repo.SaveSchedule(t.Context(), userB, task, domain.PastSchedule{Until: monday.AddDays(14)}),
+		domain.ErrTaskNotFound)
+}

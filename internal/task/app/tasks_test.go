@@ -85,8 +85,11 @@ type listener struct {
 	err   error
 }
 
-func (l *listener) ScheduleChanged(_ context.Context, _, taskID uuid.UUID) error {
-	l.calls = append(l.calls, taskID)
+func (l *listener) ScheduleChanged(_ context.Context, _ uuid.UUID, before, after domain.Task) error {
+	if before.ID != after.ID || before.Schedule == after.Schedule {
+		return errors.New("listener called with an unchanged task")
+	}
+	l.calls = append(l.calls, after.ID)
 	return l.err
 }
 

@@ -41,7 +41,10 @@ func (p progressTasks) List(ctx context.Context, userID uuid.UUID) ([]progressdo
 }
 
 func toProgressTask(t taskdomain.Task) progressdomain.Task {
-	p := progressdomain.Task{ID: t.ID, Title: t.Title, Area: t.Area, CreatedOn: calendar.DateOf(t.CreatedAt.UTC())}
+	p := progressdomain.Task{
+		ID: t.ID, Title: t.Title, Area: t.Area,
+		CreatedAt: t.CreatedAt, CreatedOn: calendar.DateOf(t.CreatedAt.UTC()),
+	}
 	switch s := t.Schedule.(type) {
 	case taskdomain.FixedSchedule:
 		p.Kind = progressdomain.FixedTask

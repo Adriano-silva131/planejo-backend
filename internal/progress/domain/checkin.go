@@ -72,4 +72,9 @@ type Repository interface {
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
 	// List returns the matching check-ins, oldest first.
 	List(ctx context.Context, userID uuid.UUID, f Filter) ([]CheckIn, error)
+	// SaveSchedule keeps the schedule a task had until s.Until. When the
+	// schedule changes more than once in a week, the first one is kept.
+	SaveSchedule(ctx context.Context, userID, taskID uuid.UUID, s PastSchedule) error
+	// Schedules returns the past schedules of the user's tasks, oldest first.
+	Schedules(ctx context.Context, userID uuid.UUID) (map[uuid.UUID][]PastSchedule, error)
 }

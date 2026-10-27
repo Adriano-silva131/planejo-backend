@@ -4,6 +4,7 @@ package calendar
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -37,6 +38,35 @@ func (w Weekdays) Days() []time.Weekday {
 		}
 	}
 	return days
+}
+
+var weekdayNames = [...]string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"}
+
+// WeekdayName returns the name the API uses for d, such as "monday".
+func WeekdayName(d time.Weekday) string {
+	return weekdayNames[d]
+}
+
+// ParseWeekdayNames reads names such as "monday" into a set.
+func ParseWeekdayNames(names []string) (Weekdays, error) {
+	days := make([]time.Weekday, 0, len(names))
+	for _, name := range names {
+		i := slices.Index(weekdayNames[:], name)
+		if i < 0 {
+			return 0, ErrInvalidWeekday
+		}
+		days = append(days, time.Weekday(i))
+	}
+	return NewWeekdays(days...)
+}
+
+// Names returns the names of the days in w, Sunday first; nil when empty.
+func (w Weekdays) Names() []string {
+	var names []string
+	for _, d := range w.Days() {
+		names = append(names, WeekdayName(d))
+	}
+	return names
 }
 
 // TimeOfDay is a wall-clock time in minutes since midnight, in the user's

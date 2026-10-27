@@ -18,6 +18,17 @@ func TestWeekdays(t *testing.T) {
 	assert.False(t, w.IsEmpty())
 }
 
+func TestWeekdayNames(t *testing.T) {
+	w, err := ParseWeekdayNames([]string{"friday", "monday"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"monday", "friday"}, w.Names())
+	assert.Equal(t, "sunday", WeekdayName(time.Sunday))
+	assert.Nil(t, Weekdays(0).Names())
+	_, err = ParseWeekdayNames([]string{"mon"})
+	assert.ErrorIs(t, err, ErrInvalidWeekday)
+}
+
 func TestWeekdaysRejectsUnknownDay(t *testing.T) {
 	_, err := NewWeekdays(time.Weekday(7))
 

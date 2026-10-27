@@ -10,10 +10,10 @@ import (
 )
 
 // ScheduleListener is told that a task's schedule changed, inside the
-// transaction of the change, so modules that keep data per occurrence can drop
-// what no longer applies.
+// transaction of the change, with the task before and after it, so modules
+// that keep data per occurrence can adapt.
 type ScheduleListener interface {
-	ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID) error
+	ScheduleChanged(ctx context.Context, userID uuid.UUID, before, after domain.Task) error
 }
 
 // Transactor runs fn in a transaction carried by ctx.
@@ -79,18 +79,18 @@ func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Detai
 		if err != nil {
 			return err
 		}
-		before := task.Schedule
+		before := task
 		if err := task.Update(d); err != nil {
 			return err
 		}
 		if updated, err = s.repo.Update(ctx, task); err != nil {
 			return err
 		}
-		if updated.Schedule == before {
+		if updated.Schedule == before.Schedule {
 			return nil
 		}
 		for _, l := range s.listeners {
-			if err := l.ScheduleChanged(ctx, userID, id); err != nil {
+			if err := l.ScheduleChanged(ctx, userID, before, updated); err != nil {
 				return err
 			}
 		}

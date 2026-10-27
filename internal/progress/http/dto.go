@@ -1,7 +1,6 @@
 package http
 
 import (
-	"strings"
 	"time"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/progress/domain"
@@ -96,10 +95,11 @@ type habitDayBody struct {
 }
 
 type habitWeekBody struct {
-	Start string         `json:"start" format:"date" doc:"Segunda-feira da semana"`
-	Done  int            `json:"done" doc:"Dias feitos na semana"`
-	Met   bool           `json:"met" doc:"Feita em pelo menos tantos dias quantos estão marcados"`
-	Days  []habitDayBody `json:"days" doc:"Os 7 dias, de segunda a domingo"`
+	Start  string         `json:"start" format:"date" doc:"Segunda-feira da semana"`
+	Target int            `json:"target" doc:"Dias pedidos na semana, pela agenda que valia nela; menos na semana de criação"`
+	Done   int            `json:"done" doc:"Dias feitos na semana, em qualquer dia"`
+	Met    bool           `json:"met" doc:"done chegou a target"`
+	Days   []habitDayBody `json:"days" doc:"Os 7 dias, de segunda a domingo"`
 }
 
 type habitBody struct {
@@ -107,7 +107,7 @@ type habitBody struct {
 	Title        string          `json:"title"`
 	Area         string          `json:"area"`
 	Weekdays     []string        `json:"weekdays" example:"[\"monday\",\"wednesday\",\"friday\"]"`
-	TimesPerWeek int             `json:"timesPerWeek" example:"3"`
+	TimesPerWeek int             `json:"timesPerWeek" doc:"Pela agenda atual" example:"3"`
 	Streak       int             `json:"streak" doc:"Semanas cumpridas seguidas; a semana em andamento não quebra a sequência"`
 	Weeks        []habitWeekBody `json:"weeks" doc:"Da mais antiga para a mais nova, a partir da criação da tarefa"`
 }
@@ -117,16 +117,16 @@ func toHabitBody(h domain.Habit) habitBody {
 		TaskID:       h.Task.ID.String(),
 		Title:        h.Task.Title,
 		Area:         h.Task.Area,
-		Weekdays:     make([]string, 0, h.Task.TimesPerWeek),
+		Weekdays:     h.Task.Weekdays.Names(),
 		TimesPerWeek: h.Task.TimesPerWeek,
 		Streak:       h.Streak,
 		Weeks:        make([]habitWeekBody, 0, len(h.Weeks)),
 	}
-	for _, d := range h.Task.Weekdays.Days() {
-		b.Weekdays = append(b.Weekdays, strings.ToLower(d.String()))
-	}
 	for _, w := range h.Weeks {
-		week := habitWeekBody{Start: w.Start.String(), Done: w.Done, Met: w.Met, Days: make([]habitDayBody, 0, len(w.Days))}
+		week := habitWeekBody{
+			Start: w.Start.String(), Target: w.Target, Done: w.Done, Met: w.Met,
+			Days: make([]habitDayBody, 0, len(w.Days)),
+		}
 		for _, d := range w.Days {
 			week.Days = append(week.Days, habitDayBody{Date: d.Date.String(), Scheduled: d.Scheduled, Done: d.Done})
 		}

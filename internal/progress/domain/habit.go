@@ -10,20 +10,22 @@ import (
 // weeks and how many weeks in a row it was met.
 type Habit struct {
 	Task Task
-	// Streak counts the weeks met in a row up to the reference week. That week
-	// counts once met, and never breaks the streak while still going on.
+	// Streak counts the weeks met in a row up to the reference week. The
+	// current and later weeks count once met and never break the streak.
 	Streak int
-	// Weeks are oldest first, from the week the task was created on.
+	// Weeks are oldest first, only those in which the task was a habit.
 	Weeks []HabitWeek
 }
 
-// HabitWeek is met when the task was done on at least as many days as it is
-// set for, on any days of the week.
+// HabitWeek is met when the task was done on at least Target days, on any
+// days of the week. Target is the number of weekdays set that week, or fewer
+// in the week the task was created, counting only the days left then.
 type HabitWeek struct {
-	Start calendar.Date
-	Done  int
-	Met   bool
-	Days  []HabitDay
+	Start  calendar.Date
+	Target int
+	Done   int
+	Met    bool
+	Days   []HabitDay
 }
 
 type HabitDay struct {
@@ -32,12 +34,17 @@ type HabitDay struct {
 	Done      bool
 }
 
-// doneDays holds the days a task was checked in, by Date.String().
-type doneDays map[string]bool
+// doneDays holds the days a task was checked in.
+type doneDays map[int64]bool
 
-// BuildHabits builds the habits of the recurring tasks for the weeks weeks
-// up to the one that contains day. Tasks created after that week are left out.
-func BuildHabits(day calendar.Date, weeks int, tasks []Task, checkIns []CheckIn) []Habit {
+func dayKey(d calendar.Date) int64 {
+	return d.Time().Unix()
+}
+
+// BuildHabits builds the habits of the recurring tasks for the weeks weeks up
+// to the one that contains day. today tells which week is still going on.
+// Tasks created after the reference week are left out.
+func BuildHabits(today, day calendar.Date, weeks int, tasks []Task, checkIns []CheckIn) []Habit {
 	ref := day.StartOfWeek()
 	end := ref.AddDays(6)
 
@@ -49,63 +56,75 @@ func BuildHabits(day calendar.Date, weeks int, tasks []Task, checkIns []CheckIn)
 		if done[c.TaskID] == nil {
 			done[c.TaskID] = doneDays{}
 		}
-		done[c.TaskID][c.Date.String()] = true
+		done[c.TaskID][dayKey(c.Date)] = true
 	}
 
 	habits := []Habit{}
 	for _, t := range tasks {
 		if t.Kind == RecurringTask && !t.CreatedOn.After(end) {
-			habits = append(habits, buildHabit(t, ref, weeks, done[t.ID]))
+			habits = append(habits, buildHabit(t, today, ref, weeks, done[t.ID]))
 		}
 	}
 	return habits
 }
 
-func buildHabit(t Task, ref calendar.Date, weeks int, done doneDays) Habit {
-	h := Habit{Task: t, Streak: streak(t, ref, done)}
-	first := t.CreatedOn.StartOfWeek()
+func buildHabit(t Task, today, ref calendar.Date, weeks int, done doneDays) Habit {
+	h := Habit{Task: t, Streak: streak(t, today, ref, done)}
 	for i := weeks - 1; i >= 0; i-- {
-		if start := ref.AddDays(-7 * i); !start.Before(first) {
+		if start := ref.AddDays(-7 * i); t.activeIn(start) {
 			h.Weeks = append(h.Weeks, habitWeek(t, start, done))
 		}
 	}
 	return h
 }
 
+// streak walks back from the reference week, over the whole history, until a
+// finished week that was not met or a week in which the task was no habit.
+func streak(t Task, today, ref calendar.Date, done doneDays) int {
+	current := today.StartOfWeek()
+	n := 0
+	for start := ref; t.activeIn(start); start = start.AddDays(-7) {
+		if habitWeek(t, start, done).Met {
+			n++
+			continue
+		}
+		if start.Before(current) {
+			break
+		}
+	}
+	return n
+}
+
+// activeIn reports whether the task existed and was recurring in the week
+// starting on start.
+func (t Task) activeIn(start calendar.Date) bool {
+	return !start.Before(t.CreatedOn.StartOfWeek()) && !t.weekdaysOn(start).IsEmpty()
+}
+
 func habitWeek(t Task, start calendar.Date, done doneDays) HabitWeek {
-	w := HabitWeek{Start: start, Days: make([]HabitDay, 0, 7)}
+	set := t.weekdaysOn(start)
+	w := HabitWeek{Start: start, Target: t.target(start, set), Days: make([]HabitDay, 0, 7)}
 	for i := range 7 {
 		d := start.AddDays(i)
-		day := HabitDay{Date: d, Scheduled: t.Weekdays.Has(d.Weekday()), Done: done[d.String()]}
+		day := HabitDay{Date: d, Scheduled: set.Has(d.Weekday()), Done: done[dayKey(d)]}
 		if day.Done {
 			w.Done++
 		}
 		w.Days = append(w.Days, day)
 	}
-	w.Met = w.Done >= t.TimesPerWeek
+	w.Met = w.Done >= w.Target
 	return w
 }
 
-// streak walks back from the reference week, over the whole history, until a
-// week that was not met or the week the task was created on.
-func streak(t Task, ref calendar.Date, done doneDays) int {
-	n := 0
-	if met(t, ref, done) {
-		n = 1
-	}
-	first := t.CreatedOn.StartOfWeek()
-	for start := ref.AddDays(-7); !start.Before(first) && met(t, start, done); start = start.AddDays(-7) {
-		n++
-	}
-	return n
-}
-
-func met(t Task, start calendar.Date, done doneDays) bool {
-	count := 0
+// target is how many days the week asks for: the weekdays set, but no more
+// than the days left in the week the task was created.
+func (t Task) target(start calendar.Date, set calendar.Weekdays) int {
+	target := len(set.Days())
+	left := 0
 	for i := range 7 {
-		if done[start.AddDays(i).String()] {
-			count++
+		if !start.AddDays(i).Before(t.CreatedOn) {
+			left++
 		}
 	}
-	return count >= t.TimesPerWeek
+	return min(target, left)
 }

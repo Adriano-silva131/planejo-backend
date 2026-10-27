@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -28,8 +29,32 @@ type Task struct {
 	// TotalMinutes and Deadline describe a one-off task.
 	TotalMinutes int
 	Deadline     calendar.Date
-	// CreatedOn is the day the task was created, in UTC.
+	// CreatedAt is when the task was created. CreatedOn is that day in UTC,
+	// or in the user's time zone when the caller knows it.
+	CreatedAt time.Time
 	CreatedOn calendar.Date
+	// PastSchedules are the weekdays a recurring task had before its schedule
+	// changed, oldest first.
+	PastSchedules []PastSchedule
+}
+
+// PastSchedule says the task was set for Weekdays in the weeks before Until,
+// the Monday of the week the change took effect. Empty Weekdays means it was
+// not a recurring task then.
+type PastSchedule struct {
+	Until    calendar.Date
+	Weekdays calendar.Weekdays
+}
+
+// weekdaysOn returns the weekdays the task was set for in the week starting
+// on start.
+func (t Task) weekdaysOn(start calendar.Date) calendar.Weekdays {
+	for _, s := range t.PastSchedules {
+		if start.Before(s.Until) {
+			return s.Weekdays
+		}
+	}
+	return t.Weekdays
 }
 
 // Tasks reads the user's tasks. Get fails with a not-found error when the

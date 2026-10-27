@@ -39,8 +39,21 @@ func (f fakeTasks) List(context.Context, uuid.UUID) ([]domain.Task, error) {
 }
 
 type fakeRepo struct {
-	saved  []domain.CheckIn
-	filter domain.Filter
+	saved     []domain.CheckIn
+	filter    domain.Filter
+	schedules map[uuid.UUID][]domain.PastSchedule
+}
+
+func (r *fakeRepo) SaveSchedule(_ context.Context, _, taskID uuid.UUID, s domain.PastSchedule) error {
+	if r.schedules == nil {
+		r.schedules = map[uuid.UUID][]domain.PastSchedule{}
+	}
+	r.schedules[taskID] = append(r.schedules[taskID], s)
+	return nil
+}
+
+func (r *fakeRepo) Schedules(context.Context, uuid.UUID) (map[uuid.UUID][]domain.PastSchedule, error) {
+	return r.schedules, nil
 }
 
 func (r *fakeRepo) Save(_ context.Context, c domain.CheckIn) (domain.CheckIn, error) {
@@ -104,15 +117,43 @@ func TestHistoryChecksTheTaskFirst(t *testing.T) {
 	assert.ErrorIs(t, err, errNotFound)
 }
 
-func TestHabitsLoadCheckInsUntilTheEndOfTheWeek(t *testing.T) {
-	repo := &fakeRepo{}
+func TestHabitsUseTheUsersTimeZone(t *testing.T) {
+	// Created Sunday 2026-10-25 at 22:00 in São Paulo, already Monday in UTC.
+	saoPaulo := time.FixedZone("BRT", -3*60*60)
+	reading := domain.Task{
+		ID: uuid.New(), Title: "Leitura", Kind: domain.RecurringTask,
+		Weekdays: calendar.Weekdays(1 << time.Sunday), TimesPerWeek: 1,
+		CreatedAt: time.Date(2026, time.October, 26, 1, 0, 0, 0, time.UTC),
+		CreatedOn: calendar.NewDate(2026, time.October, 26),
+	}
+	repo := &fakeRepo{saved: []domain.CheckIn{{TaskID: reading.ID, Date: calendar.NewDate(2026, time.October, 25)}}}
+	p := NewProgress(fakeTasks{reading.ID: reading}, repo)
+	// Monday 2026-10-26 at 01:00 in São Paulo: the week of the 19th is over.
+	p.now = func() time.Time { return time.Date(2026, time.October, 26, 4, 0, 0, 0, time.UTC) }
 
-	habits, err := newProgress(repo, time.Now()).Habits(t.Context(), userID, calendar.NewDate(2026, time.October, 28), 4)
+	habits, err := p.Habits(t.Context(), userID, calendar.NewDate(2026, time.October, 25), 4, saoPaulo)
 
 	require.NoError(t, err)
-	assert.Equal(t, domain.Filter{To: calendar.NewDate(2026, time.November, 1)}, repo.filter)
-	require.Len(t, habits, 1)
-	assert.Len(t, habits[0].Weeks, 4)
+	require.Len(t, habits, 1, "created on Sunday in the user's time zone")
+	require.Len(t, habits[0].Weeks, 1)
+	assert.True(t, habits[0].Weeks[0].Met)
+	assert.Equal(t, 1, habits[0].Streak)
+	assert.Equal(t, domain.Filter{
+		From: calendar.NewDate(2026, time.October, 19),
+		To:   calendar.NewDate(2026, time.October, 25),
+	}, repo.filter, "check-ins from the oldest habit's week")
+}
+
+func TestScheduleChangedKeepsTheOldWeekdaysUntilThisWeek(t *testing.T) {
+	repo := &fakeRepo{}
+	// Wednesday 2026-10-28.
+	p := newProgress(repo, time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC))
+
+	require.NoError(t, p.ScheduleChanged(t.Context(), userID, gym.ID, calendar.Weekdays(1<<time.Monday)))
+
+	assert.Equal(t, []domain.PastSchedule{{
+		Until: calendar.NewDate(2026, time.October, 26), Weekdays: calendar.Weekdays(1 << time.Monday),
+	}}, repo.schedules[gym.ID])
 }
 
 func TestWeekLoadsCheckInsUntilTheEndOfTheWeek(t *testing.T) {

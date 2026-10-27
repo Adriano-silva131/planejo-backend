@@ -319,8 +319,10 @@ func TestHabits(t *testing.T) {
 	}, pick(habit, "taskId", "title", "area", "streak", "timesPerWeek", "weekdays"))
 	weeks, _ := habit["weeks"].([]any)
 	require.Len(t, weeks, 2)
-	assert.Equal(t, map[string]any{"start": "2026-10-19", "done": 3.0, "met": true}, pick(weeks[0], "start", "done", "met"))
-	assert.Equal(t, map[string]any{"start": "2026-10-26", "done": 1.0, "met": false}, pick(weeks[1], "start", "done", "met"))
+	assert.Equal(t, map[string]any{"start": "2026-10-19", "target": 3.0, "done": 3.0, "met": true},
+		pick(weeks[0], "start", "target", "done", "met"))
+	assert.Equal(t, map[string]any{"start": "2026-10-26", "target": 3.0, "done": 1.0, "met": false},
+		pick(weeks[1], "start", "target", "done", "met"))
 	current, _ := weeks[1].(map[string]any)
 	tuesday, _ := current["days"].([]any)[1].(map[string]any)
 	assert.Equal(t, map[string]any{"date": "2026-10-27", "scheduled": false, "done": true}, tuesday)
@@ -336,4 +338,6 @@ func TestHabitsValidationAndIsolation(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, srv.do(http.MethodGet, "/v1/progress/habits", "token-a", "").Code)
 	assert.Equal(t, http.StatusUnprocessableEntity,
 		srv.do(http.MethodGet, "/v1/progress/habits?week=2026-10-28&weeks=27", "token-a", "").Code)
+	assert.Equal(t, http.StatusUnprocessableEntity,
+		srv.doIn("", http.MethodGet, "/v1/progress/habits?week=2026-10-28", "token-a", "").Code, "Time-Zone is required")
 }

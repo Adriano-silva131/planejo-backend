@@ -50,7 +50,12 @@ func (p *Progress) History(ctx context.Context, userID uuid.UUID, f domain.Filte
 
 // Week summarizes the week that contains day.
 func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date) (domain.WeekSummary, error) {
-	tasks, checkIns, err := p.untilEndOfWeek(ctx, userID, day)
+	tasks, err := p.tasks.List(ctx, userID)
+	if err != nil {
+		return domain.WeekSummary{}, err
+	}
+	// One-off tasks add up every check-in until the end of the week.
+	checkIns, err := p.repo.List(ctx, userID, domain.Filter{To: day.StartOfWeek().AddDays(6)})
 	if err != nil {
 		return domain.WeekSummary{}, err
 	}
@@ -58,27 +63,55 @@ func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date
 }
 
 // Habits follows the recurring tasks over the weeks weeks up to the one that
-// contains day.
-func (p *Progress) Habits(ctx context.Context, userID uuid.UUID, day calendar.Date, weeks int) ([]domain.Habit, error) {
-	tasks, checkIns, err := p.untilEndOfWeek(ctx, userID, day)
+// contains day. loc is the user's time zone, which tells today and the day
+// each task was created.
+func (p *Progress) Habits(
+	ctx context.Context, userID uuid.UUID, day calendar.Date, weeks int, loc *time.Location,
+) ([]domain.Habit, error) {
+	tasks, err := p.tasks.List(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	return domain.BuildHabits(day, weeks, tasks, checkIns), nil
+	schedules, err := p.repo.Schedules(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range tasks {
+		t := &tasks[i]
+		if !t.CreatedAt.IsZero() {
+			t.CreatedOn = calendar.DateOf(t.CreatedAt.In(loc))
+		}
+		t.PastSchedules = schedules[t.ID]
+	}
+	checkIns, err := p.repo.List(ctx, userID, domain.Filter{From: oldestHabitWeek(tasks), To: day.StartOfWeek().AddDays(6)})
+	if err != nil {
+		return nil, err
+	}
+	return domain.BuildHabits(calendar.DateOf(p.now().In(loc)), day, weeks, tasks, checkIns), nil
 }
 
-// untilEndOfWeek loads the user's tasks and every check-in until the end of
-// the week that contains day: one-off totals and streaks need the history.
-func (p *Progress) untilEndOfWeek(
-	ctx context.Context, userID uuid.UUID, day calendar.Date,
-) ([]domain.Task, []domain.CheckIn, error) {
-	tasks, err := p.tasks.List(ctx, userID)
-	if err != nil {
-		return nil, nil, err
+// oldestHabitWeek is the Monday of the oldest recurring task's creation week:
+// no grid or streak goes further back. Zero means no bound.
+func oldestHabitWeek(tasks []domain.Task) calendar.Date {
+	var oldest calendar.Date
+	for _, t := range tasks {
+		if t.Kind != domain.RecurringTask || t.CreatedOn.IsZero() {
+			continue
+		}
+		if oldest.IsZero() || t.CreatedOn.Before(oldest) {
+			oldest = t.CreatedOn
+		}
 	}
-	checkIns, err := p.repo.List(ctx, userID, domain.Filter{To: day.StartOfWeek().AddDays(6)})
-	if err != nil {
-		return nil, nil, err
+	if oldest.IsZero() {
+		return oldest
 	}
-	return tasks, checkIns, nil
+	return oldest.StartOfWeek()
+}
+
+// ScheduleChanged keeps the weekdays a task had before its schedule changed
+// this week, so past habit weeks are judged by them. Empty weekdays mean it
+// was not recurring.
+func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before calendar.Weekdays) error {
+	until := calendar.DateOf(p.now().UTC()).StartOfWeek()
+	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{Until: until, Weekdays: before})
 }

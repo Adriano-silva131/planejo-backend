@@ -162,8 +162,9 @@ type day struct {
 }
 
 type habitsInput struct {
-	Week  string `query:"week" format:"date" required:"true" doc:"Um dia da semana de referência, normalmente hoje" example:"2026-10-27"`
-	Weeks int    `query:"weeks" minimum:"1" maximum:"26" default:"8" doc:"Quantas semanas mostrar na grade"`
+	Week     string `query:"week" format:"date" required:"true" doc:"Um dia da semana de referência, normalmente hoje" example:"2026-10-27"`
+	Weeks    int    `query:"weeks" minimum:"1" maximum:"26" default:"8" doc:"Quantas semanas mostrar na grade"`
+	TimeZone string `header:"Time-Zone" required:"true" doc:"Fuso do aparelho, no formato IANA; define a semana em andamento" example:"America/Sao_Paulo"`
 }
 
 type habitsOutput struct {
@@ -182,7 +183,11 @@ func (h handler) habits(ctx context.Context, in *habitsInput) (*habitsOutput, er
 	if err != nil {
 		return nil, err
 	}
-	habits, err := h.progress.Habits(ctx, userID, day, in.Weeks)
+	loc, err := parseTimeZone(in.TimeZone)
+	if err != nil {
+		return nil, err
+	}
+	habits, err := h.progress.Habits(ctx, userID, day, in.Weeks, loc)
 	if err != nil {
 		return nil, err
 	}

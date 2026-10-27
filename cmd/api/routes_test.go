@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
@@ -29,8 +30,15 @@ func (oneUser) Verify(context.Context, string) (auth.User, error) {
 	return auth.User{ID: uuid.MustParse("0b9c3f0e-1111-4a8e-9a5b-2f1d7c3e8b90")}, nil
 }
 
-// api serves the routes wired by registerRoutes, as in production.
+// api serves the routes wired by registerRoutes, as in production, on a
+// transaction rolled back at the end of the test.
 func api(t *testing.T) func(method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	call, _ := apiOn(t)
+	return call
+}
+
+func apiOn(t *testing.T) (func(method, path, body string) *httptest.ResponseRecorder, *gorm.DB) {
 	t.Helper()
 	router := httpx.New(httpx.Options{
 		AllowedOrigins:           []string{"http://localhost:5173"},
@@ -40,19 +48,21 @@ func api(t *testing.T) func(method, path, body string) *httptest.ResponseRecorde
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	registerRoutes(router, dbtest.Tx(t))
+	tx := dbtest.Tx(t)
+	registerRoutes(router, tx)
 
 	return func(method, path, body string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer token")
+		req.Header.Set("Time-Zone", "America/Sao_Paulo")
 		if body != "" {
 			req.Header.Set("Content-Type", "application/json")
 		}
 		rec := httptest.NewRecorder()
 		router.Handler.ServeHTTP(rec, req)
 		return rec
-	}
+	}, tx
 }
 
 func mondayBlocks(t *testing.T, rec *httptest.ResponseRecorder) int {
@@ -100,4 +110,26 @@ func TestEveryModuleIsWired(t *testing.T) {
 	} {
 		assert.Equal(t, http.StatusOK, call(http.MethodGet, path, "").Code, path)
 	}
+}
+
+func TestChangingAHabitsWeekdaysKeepsTheOldOnes(t *testing.T) {
+	call, tx := apiOn(t)
+	const threeDays = `{"title":"Academia","area":"Saúde","kind":"recurring","priority":"high",
+		"weekdays":["monday","wednesday","friday"],"durationMinutes":60}`
+	created := call(http.MethodPost, "/v1/tasks", threeDays)
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+	var task struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &task))
+
+	longer := strings.Replace(threeDays, `"durationMinutes":60`, `"durationMinutes":90`, 1)
+	require.Equal(t, http.StatusOK, call(http.MethodPut, "/v1/tasks/"+task.ID, longer).Code)
+	fiveDays := strings.Replace(threeDays, `"monday","wednesday","friday"`,
+		`"monday","tuesday","wednesday","thursday","friday"`, 1)
+	require.Equal(t, http.StatusOK, call(http.MethodPut, "/v1/tasks/"+task.ID, fiveDays).Code)
+
+	var kept []int
+	require.NoError(t, tx.Raw("SELECT weekdays FROM habit_schedules WHERE task_id = ?", task.ID).Scan(&kept).Error)
+	assert.Equal(t, []int{1<<1 | 1<<3 | 1<<5}, kept, "only the weekday change is kept, with the old days")
 }
