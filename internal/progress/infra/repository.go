@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/progress/domain"
@@ -63,26 +62,20 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// Save upserts on (task_id, date). The update only applies to a row of the
-// same user, so a check-in of someone else is never overwritten.
+var upsert = db.OwnedUpsert{
+	Table:    "checkins",
+	Conflict: []string{"task_id", "date"},
+	Update:   []string{"minutes", "completed", "updated_at"},
+}
+
 func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn, error) {
 	m := toModel(c)
-	res := db.Conn(ctx, r.db).Clauses(
-		clause.OnConflict{
-			Columns:   []clause.Column{{Name: "task_id"}, {Name: "date"}},
-			Where:     clause.Where{Exprs: []clause.Expression{clause.Eq{Column: "checkins.user_id", Value: m.UserID}}},
-			DoUpdates: clause.AssignmentColumns([]string{"minutes", "completed", "updated_at"}),
-		},
-		clause.Returning{},
-	).Create(&m)
-	if errors.Is(res.Error, gorm.ErrForeignKeyViolated) {
+	err := upsert.Save(ctx, r.db, &m, m.UserID)
+	switch {
+	case errors.Is(err, db.ErrNotOwned), errors.Is(err, gorm.ErrForeignKeyViolated):
 		return domain.CheckIn{}, domain.ErrTaskNotFound
-	}
-	if res.Error != nil {
-		return domain.CheckIn{}, fmt.Errorf("checkin: save: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
-		return domain.CheckIn{}, domain.ErrCheckInNotFound
+	case err != nil:
+		return domain.CheckIn{}, fmt.Errorf("checkin: save: %w", err)
 	}
 	return toDomain(m), nil
 }

@@ -101,8 +101,8 @@ func (s server) addTask(owner uuid.UUID, task domain.Task) string {
 	s.t.Helper()
 	task.ID = uuid.New()
 	require.NoError(s.t, s.tx.Exec(
-		`INSERT INTO tasks (id, user_id, title, kind, start_minute, end_minute, weekdays)
-		 VALUES (?, ?, ?, 'fixed', 540, 600, 2)`, task.ID, owner, task.Title).Error)
+		`INSERT INTO tasks (id, user_id, title, area, kind, start_minute, end_minute, weekdays)
+		 VALUES (?, ?, ?, 'Teste', 'fixed', 540, 600, 2)`, task.ID, owner, task.Title).Error)
 	s.tasks[task.ID] = ownedTask{owner: owner, task: task}
 	return task.ID.String()
 }

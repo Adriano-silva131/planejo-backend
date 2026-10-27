@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -54,6 +55,14 @@ func (r *fakeRepo) All(_ context.Context, userID uuid.UUID) ([]domain.Task, erro
 	return out, nil
 }
 
+func (r *fakeRepo) Fixed(context.Context, uuid.UUID, calendar.Date, calendar.Date) ([]domain.Task, error) {
+	return nil, nil
+}
+
+func (r *fakeRepo) Areas(context.Context, uuid.UUID) ([]domain.AreaUsage, error) {
+	return nil, nil
+}
+
 func (r *fakeRepo) Update(_ context.Context, t domain.Task) (domain.Task, error) {
 	r.updateCalled = true
 	r.tasks[t.ID] = t
@@ -65,12 +74,29 @@ func (r *fakeRepo) Delete(_ context.Context, _, id uuid.UUID) error {
 	return nil
 }
 
+type noTx struct{}
+
+func (noTx) InTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+type listener struct {
+	calls []uuid.UUID
+	err   error
+}
+
+func (l *listener) ScheduleChanged(_ context.Context, _, taskID uuid.UUID) error {
+	l.calls = append(l.calls, taskID)
+	return l.err
+}
+
 func gym(t *testing.T) domain.Details {
 	t.Helper()
 	days, err := calendar.NewWeekdays(time.Monday, time.Wednesday)
 	require.NoError(t, err)
 	return domain.Details{
 		Title:    "Academia",
+		Area:     "Saúde",
 		Priority: domain.High,
 		Schedule: domain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
 	}
@@ -79,7 +105,7 @@ func gym(t *testing.T) domain.Details {
 func TestCreateStoresValidTask(t *testing.T) {
 	repo := newFakeRepo()
 
-	task, err := NewTasks(repo).Create(t.Context(), userID, gym(t))
+	task, err := NewTasks(repo, noTx{}).Create(t.Context(), userID, gym(t))
 
 	require.NoError(t, err)
 	assert.Equal(t, userID, task.UserID)
@@ -89,7 +115,7 @@ func TestCreateStoresValidTask(t *testing.T) {
 func TestCreateRejectsInvalidTask(t *testing.T) {
 	repo := newFakeRepo()
 
-	_, err := NewTasks(repo).Create(t.Context(), userID, domain.Details{Title: "Academia"})
+	_, err := NewTasks(repo, noTx{}).Create(t.Context(), userID, domain.Details{Title: "Academia", Area: "Saúde"})
 
 	assert.ErrorIs(t, err, domain.ErrScheduleRequired)
 	assert.Empty(t, repo.tasks)
@@ -98,7 +124,7 @@ func TestCreateRejectsInvalidTask(t *testing.T) {
 func TestListTurnsPageIntoOffset(t *testing.T) {
 	repo := newFakeRepo()
 
-	_, _, err := NewTasks(repo).List(t.Context(), userID, 3, 20)
+	_, _, err := NewTasks(repo, noTx{}).List(t.Context(), userID, 3, 20)
 
 	require.NoError(t, err)
 	assert.Equal(t, 40, repo.offset)
@@ -107,7 +133,7 @@ func TestListTurnsPageIntoOffset(t *testing.T) {
 
 func TestUpdateValidatesBeforeSaving(t *testing.T) {
 	repo := newFakeRepo()
-	tasks := NewTasks(repo)
+	tasks := NewTasks(repo, noTx{})
 	task, err := tasks.Create(t.Context(), userID, gym(t))
 	require.NoError(t, err)
 
@@ -118,7 +144,41 @@ func TestUpdateValidatesBeforeSaving(t *testing.T) {
 }
 
 func TestUpdateOfMissingTask(t *testing.T) {
-	_, err := NewTasks(newFakeRepo()).Update(t.Context(), userID, uuid.New(), gym(t))
+	_, err := NewTasks(newFakeRepo(), noTx{}).Update(t.Context(), userID, uuid.New(), gym(t))
 
 	assert.ErrorIs(t, err, domain.ErrTaskNotFound)
+}
+
+func TestUpdateTellsListenersWhenTheScheduleChanges(t *testing.T) {
+	tasks := NewTasks(newFakeRepo(), noTx{})
+	l := &listener{}
+	tasks.OnScheduleChange(l)
+	task, err := tasks.Create(t.Context(), userID, gym(t))
+	require.NoError(t, err)
+
+	renamed := gym(t)
+	renamed.Title = "Academia do bairro"
+	_, err = tasks.Update(t.Context(), userID, task.ID, renamed)
+	require.NoError(t, err)
+	assert.Empty(t, l.calls, "the schedule did not change")
+
+	moved := gym(t)
+	moved.Schedule = domain.RecurringSchedule{Weekdays: calendar.Weekdays(1 << time.Friday), Duration: time.Hour}
+	_, err = tasks.Update(t.Context(), userID, task.ID, moved)
+	require.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{task.ID}, l.calls)
+}
+
+func TestUpdateFailsWhenAListenerFails(t *testing.T) {
+	tasks := NewTasks(newFakeRepo(), noTx{})
+	errBoom := errors.New("boom")
+	tasks.OnScheduleChange(&listener{err: errBoom})
+	task, err := tasks.Create(t.Context(), userID, gym(t))
+	require.NoError(t, err)
+	moved := gym(t)
+	moved.Schedule = domain.RecurringSchedule{Weekdays: calendar.Weekdays(1 << time.Friday), Duration: time.Hour}
+
+	_, err = tasks.Update(t.Context(), userID, task.ID, moved)
+
+	assert.ErrorIs(t, err, errBoom)
 }

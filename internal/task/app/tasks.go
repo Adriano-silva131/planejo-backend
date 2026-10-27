@@ -5,16 +5,36 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
-// Tasks is the CRUD of a user's tasks.
-type Tasks struct {
-	repo domain.Repository
+// ScheduleListener is told that a task's schedule changed, inside the
+// transaction of the change, so modules that keep data per occurrence can drop
+// what no longer applies.
+type ScheduleListener interface {
+	ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID) error
 }
 
-func NewTasks(repo domain.Repository) *Tasks {
-	return &Tasks{repo: repo}
+// Transactor runs fn in a transaction carried by ctx.
+type Transactor interface {
+	InTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// Tasks is the CRUD of a user's tasks.
+type Tasks struct {
+	repo      domain.Repository
+	tx        Transactor
+	listeners []ScheduleListener
+}
+
+func NewTasks(repo domain.Repository, tx Transactor) *Tasks {
+	return &Tasks{repo: repo, tx: tx}
+}
+
+// OnScheduleChange registers l. It is not safe to call while serving requests.
+func (s *Tasks) OnScheduleChange(l ScheduleListener) {
+	s.listeners = append(s.listeners, l)
 }
 
 func (s *Tasks) Create(ctx context.Context, userID uuid.UUID, d domain.Details) (domain.Task, error) {
@@ -39,15 +59,47 @@ func (s *Tasks) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, error
 	return s.repo.All(ctx, userID)
 }
 
+// Fixed returns the fixed tasks that may occur from from to to, for modules
+// that build a period from them.
+func (s *Tasks) Fixed(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]domain.Task, error) {
+	return s.repo.Fixed(ctx, userID, from, to)
+}
+
+// Areas lists the areas the user has used, for the client to suggest.
+func (s *Tasks) Areas(ctx context.Context, userID uuid.UUID) ([]domain.AreaUsage, error) {
+	return s.repo.Areas(ctx, userID)
+}
+
+// Update replaces the task's details. When its schedule changes, the
+// listeners are told in the same transaction.
 func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Details) (domain.Task, error) {
-	task, err := s.repo.Get(ctx, userID, id)
+	var updated domain.Task
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		task, err := s.repo.Get(ctx, userID, id)
+		if err != nil {
+			return err
+		}
+		before := task.Schedule
+		if err := task.Update(d); err != nil {
+			return err
+		}
+		if updated, err = s.repo.Update(ctx, task); err != nil {
+			return err
+		}
+		if updated.Schedule == before {
+			return nil
+		}
+		for _, l := range s.listeners {
+			if err := l.ScheduleChanged(ctx, userID, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if err := task.Update(d); err != nil {
-		return domain.Task{}, err
-	}
-	return s.repo.Update(ctx, task)
+	return updated, nil
 }
 
 func (s *Tasks) Delete(ctx context.Context, userID, id uuid.UUID) error {

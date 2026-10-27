@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/app"
@@ -57,7 +58,8 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewTasks(infra.NewRepository(dbtest.Tx(t))))
+	tx := dbtest.Tx(t)
+	Register(router.Authenticated, app.NewTasks(infra.NewRepository(tx), db.NewTransactor(tx)))
 	return server{t: t, handler: router.Handler}
 }
 
@@ -97,7 +99,7 @@ func errorOf(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 const (
 	gymJSON = `{"title":"Academia","area":"Saúde","kind":"recurring","priority":"high",
 		"weekdays":["monday","wednesday","friday"],"durationMinutes":60,"period":"morning"}`
-	workJSON = `{"title":"Trabalho","kind":"fixed",
+	workJSON = `{"title":"Trabalho","area":"Trabalho","kind":"fixed",
 		"weekdays":["monday","tuesday","wednesday","thursday","friday"],"start":"09:00","end":"18:00"}`
 	appointmentJSON = `{"title":"Consulta médica","area":"Saúde","kind":"fixed",
 		"date":"2026-11-05","start":"15:00","end":"16:00"}`
@@ -125,7 +127,7 @@ func TestCreateEachKind(t *testing.T) {
 
 func TestCreateReportsFieldsByKind(t *testing.T) {
 	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
-		`{"title":"Academia","kind":"recurring","weekdays":["monday"],"deadline":"2026-10-30"}`)
+		`{"title":"Academia","area":"Saúde","kind":"recurring","weekdays":["monday"],"deadline":"2026-10-30"}`)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Equal(t, map[string]any{
@@ -137,11 +139,11 @@ func TestCreateReportsFieldsByKind(t *testing.T) {
 
 func TestCreateReportsDomainRules(t *testing.T) {
 	for want, body := range map[string]string{
-		"fixed_task_days": `{"title":"Trabalho","kind":"fixed","weekdays":["monday"],
+		"fixed_task_days": `{"title":"Trabalho","area":"Trabalho","kind":"fixed","weekdays":["monday"],
 			"date":"2026-11-05","start":"09:00","end":"18:00"}`,
-		"task_invalid_time_range": `{"title":"Trabalho","kind":"fixed","weekdays":["monday"],
-			"start":"18:00","end":"09:00"}`,
-		"task_title_required": `{"title":"   ","kind":"one_off","priority":"low",
+		"task_invalid_time_range": `{"title":"Trabalho","area":"Trabalho","kind":"fixed","weekdays":["monday"],
+			"start":"09:00","end":"09:00"}`,
+		"task_title_required": `{"title":"   ","area":"Trabalho","kind":"one_off","priority":"low",
 			"durationMinutes":30,"deadline":"2026-10-30"}`,
 	} {
 		t.Run(want, func(t *testing.T) {
@@ -155,7 +157,7 @@ func TestCreateReportsDomainRules(t *testing.T) {
 
 func TestCreateValidatesFormats(t *testing.T) {
 	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
-		`{"title":"Trabalho","kind":"fixed","weekdays":["mon"],"start":"9h","end":"18:00"}`)
+		`{"title":"Trabalho","area":"Trabalho","kind":"fixed","weekdays":["mon"],"start":"9h","end":"18:00"}`)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	fields := errorOf(t, rec)["fields"]
@@ -219,4 +221,27 @@ func TestOtherUsersTasksAreNotFound(t *testing.T) {
 
 func TestTasksRequireToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, newServer(t).do(http.MethodGet, "/v1/tasks", "", "").Code)
+}
+
+func TestCreateRequiresArea(t *testing.T) {
+	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
+		`{"title":"Leitura","kind":"recurring","priority":"low","weekdays":["sunday"],"durationMinutes":30}`)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Contains(t, errorOf(t, rec)["fields"], "area")
+}
+
+func TestListAreas(t *testing.T) {
+	srv := newServer(t)
+	for _, body := range []string{gymJSON, appointmentJSON, reportJSON, workJSON} {
+		srv.create(tokenA, body)
+	}
+
+	rec := srv.do(http.MethodGet, "/v1/tasks/areas", tokenA, "")
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []any{
+		map[string]any{"area": "Saúde", "tasks": 2.0},
+		map[string]any{"area": "Trabalho", "tasks": 2.0},
+	}, decode(t, rec)["data"])
 }

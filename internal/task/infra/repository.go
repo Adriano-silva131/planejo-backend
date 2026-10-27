@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -70,6 +71,33 @@ func (r *Repository) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, 
 		return nil, fmt.Errorf("task: all: %w", err)
 	}
 	return toDomainList(models)
+}
+
+func (r *Repository) Fixed(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]domain.Task, error) {
+	var models []taskModel
+	err := db.Conn(ctx, r.db).
+		Where("user_id = ? AND kind = ?", userID, domain.Fixed).
+		Where("weekdays > 0 OR date BETWEEN ? AND ?", from.Time(), to.Time()).
+		Order("created_at DESC, id DESC").
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("task: fixed: %w", err)
+	}
+	return toDomainList(models)
+}
+
+func (r *Repository) Areas(ctx context.Context, userID uuid.UUID) ([]domain.AreaUsage, error) {
+	var areas []domain.AreaUsage
+	err := db.Conn(ctx, r.db).Model(&taskModel{}).
+		Select("area, count(*) AS tasks").
+		Where("user_id = ?", userID).
+		Group("area").
+		Order("tasks DESC, area").
+		Scan(&areas).Error
+	if err != nil {
+		return nil, fmt.Errorf("task: areas: %w", err)
+	}
+	return areas, nil
 }
 
 func toDomainList(models []taskModel) ([]domain.Task, error) {

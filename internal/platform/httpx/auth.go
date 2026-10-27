@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/google/uuid"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/logger"
@@ -36,6 +37,16 @@ func authenticate(api huma.API, verifier TokenVerifier) func(huma.Context, func(
 		c = logger.With(c, slog.String("userId", user.ID.String()))
 		next(huma.WithContext(ctx, c))
 	}
+}
+
+// CurrentUser returns the id of the authenticated user, for handlers of the
+// Authenticated group. Without a user in ctx it answers 401.
+func CurrentUser(ctx context.Context) (uuid.UUID, error) {
+	user, ok := auth.UserFrom(ctx)
+	if !ok {
+		return uuid.Nil, huma.Error401Unauthorized("")
+	}
+	return user.ID, nil
 }
 
 func bearerToken(header string) (string, bool) {

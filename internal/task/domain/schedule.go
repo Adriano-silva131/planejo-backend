@@ -39,7 +39,8 @@ type Schedule interface {
 	validate() error
 }
 
-// FixedSchedule repeats on Weekdays or happens once on Date, never both.
+// FixedSchedule repeats on Weekdays or happens once on Date, never both. An
+// End before Start means it ends the next day, as in a night's sleep.
 type FixedSchedule struct {
 	Weekdays calendar.Weekdays
 	Date     calendar.Date
@@ -56,7 +57,7 @@ func (s FixedSchedule) validate() error {
 	if !s.Start.Valid() || !s.End.Valid() {
 		return calendar.ErrInvalidTime
 	}
-	if s.End <= s.Start {
+	if s.End == s.Start {
 		return ErrInvalidTimeRange
 	}
 	return nil

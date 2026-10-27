@@ -125,6 +125,10 @@ func (d Date) AddDays(n int) Date {
 	return Date{t: d.t.AddDate(0, 0, n)}
 }
 
+func (d Date) Equal(other Date) bool {
+	return d.t.Equal(other.t)
+}
+
 func (d Date) Before(other Date) bool {
 	return d.t.Before(other.t)
 }

@@ -14,14 +14,14 @@ import (
 // kind; fieldsByKind says which ones each kind requires and accepts.
 type taskFields struct {
 	Title string `json:"title" minLength:"1" maxLength:"120" doc:"Título da tarefa" example:"Academia"`
-	Area  string `json:"area,omitempty" maxLength:"50" doc:"Rótulo livre para organizar as tarefas, ex.: Saúde, Trabalho, Estudos" example:"Saúde"`
+	Area  string `json:"area" minLength:"1" maxLength:"50" doc:"Tipo da tarefa, escolhido pelo usuário, ex.: Saúde, Trabalho, Estudos; GET /tasks/areas lista os já usados" example:"Saúde"`
 	Kind  string `json:"kind" enum:"fixed,recurring,one_off" doc:"fixed: hora marcada, o planejador só contorna; recurring: repete nos dias escolhidos; one_off: uma vez, até o prazo" example:"recurring"`
 
 	Priority string   `json:"priority,omitempty" enum:"high,medium,low" doc:"recurring e one_off" example:"high"`
 	Weekdays []string `json:"weekdays,omitempty" enum:"sunday,monday,tuesday,wednesday,thursday,friday,saturday" uniqueItems:"true" doc:"recurring, ou fixed semanal"`
 	Date     string   `json:"date,omitempty" format:"date" doc:"fixed num dia específico, no lugar de weekdays"`
 	Start    string   `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: início, no fuso do usuário" example:"09:00"`
-	End      string   `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: fim, no fuso do usuário" example:"18:00"`
+	End      string   `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: fim, no fuso do usuário; antes do início, termina no dia seguinte" example:"18:00"`
 
 	DurationMinutes int    `json:"durationMinutes,omitempty" minimum:"5" maximum:"6000" doc:"recurring: por sessão; one_off: total" example:"60"`
 	Deadline        string `json:"deadline,omitempty" format:"date" doc:"one_off: último dia para concluir"`

@@ -78,6 +78,10 @@ func TestDateArithmetic(t *testing.T) {
 	assert.True(t, thursday.Before(thursday.AddDays(1)))
 	assert.True(t, thursday.After(thursday.AddDays(-1)))
 	assert.False(t, thursday.After(thursday))
+	parsed, err := ParseDate("2026-10-29")
+	require.NoError(t, err)
+	assert.True(t, thursday.Equal(parsed))
+	assert.False(t, thursday.Equal(thursday.AddDays(1)))
 }
 
 func TestStartOfWeekIsMonday(t *testing.T) {

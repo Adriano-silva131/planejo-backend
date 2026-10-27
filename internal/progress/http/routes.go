@@ -8,7 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
-	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/progress/app"
 	"github.com/Adriano-silva131/planejo-backend/internal/progress/domain"
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
@@ -134,15 +134,15 @@ func (h handler) history(ctx context.Context, in *historyInput) (*historyOutput,
 }
 
 func (h handler) week(ctx context.Context, in *weekInput) (*weekOutput, error) {
-	user, ok := auth.UserFrom(ctx)
-	if !ok {
-		return nil, huma.Error401Unauthorized("")
+	userID, err := httpx.CurrentUser(ctx)
+	if err != nil {
+		return nil, err
 	}
 	day, err := calendar.ParseDate(in.Week)
 	if err != nil {
 		return nil, err
 	}
-	s, err := h.progress.Week(ctx, user.ID, day)
+	s, err := h.progress.Week(ctx, userID, day)
 	if err != nil {
 		return nil, err
 	}
@@ -184,13 +184,11 @@ func parseTimeZone(name string) (*time.Location, error) {
 // userAndTask returns the authenticated user and the task id from the path.
 // The id format is checked by huma, so a parse failure means no such task.
 func userAndTask(ctx context.Context, rawID string) (userID, taskID uuid.UUID, err error) {
-	user, ok := auth.UserFrom(ctx)
-	if !ok {
-		return uuid.Nil, uuid.Nil, huma.Error401Unauthorized("")
+	if userID, err = httpx.CurrentUser(ctx); err != nil {
+		return uuid.Nil, uuid.Nil, err
 	}
-	taskID, err = uuid.Parse(rawID)
-	if err != nil {
+	if taskID, err = uuid.Parse(rawID); err != nil {
 		return uuid.Nil, uuid.Nil, huma.Error404NotFound("")
 	}
-	return user.ID, taskID, nil
+	return userID, taskID, nil
 }

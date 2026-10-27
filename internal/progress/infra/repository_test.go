@@ -41,8 +41,8 @@ func (f fixture) task(userID uuid.UUID) uuid.UUID {
 	f.t.Helper()
 	id := uuid.New()
 	require.NoError(f.t, f.tx.Exec(
-		`INSERT INTO tasks (id, user_id, title, kind, priority, weekdays, duration_minutes)
-		 VALUES (?, ?, 'Academia', 'recurring', 'high', 2, 60)`, id, userID).Error)
+		`INSERT INTO tasks (id, user_id, title, area, kind, priority, weekdays, duration_minutes)
+		 VALUES (?, ?, 'Academia', 'Saúde', 'recurring', 'high', 2, 60)`, id, userID).Error)
 	return id
 }
 
@@ -116,7 +116,7 @@ func TestSaveNeverOverwritesAnotherUsersCheckIn(t *testing.T) {
 
 	_, err := f.repo.Save(t.Context(), domain.CheckIn{UserID: userB, TaskID: task, Date: monday, Minutes: 999})
 
-	require.ErrorIs(t, err, domain.ErrCheckInNotFound)
+	require.ErrorIs(t, err, domain.ErrTaskNotFound)
 	assert.Equal(t, 30, f.list(userA, domain.Filter{})[0].Minutes)
 }
 

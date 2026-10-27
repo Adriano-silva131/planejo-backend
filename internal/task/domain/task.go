@@ -24,7 +24,7 @@ const (
 // Details are the fields the user edits.
 type Details struct {
 	Title string
-	// Area is a free label chosen by the user, such as "Saúde". Optional.
+	// Area is a required label chosen by the user, such as "Saúde".
 	Area string
 	// Priority is required, except for fixed tasks, which always happen.
 	Priority Priority
@@ -69,6 +69,8 @@ func (d Details) validate() error {
 		return ErrTitleRequired
 	case utf8.RuneCountInString(d.Title) > MaxTitleLength:
 		return ErrTitleTooLong
+	case d.Area == "":
+		return ErrAreaRequired
 	case utf8.RuneCountInString(d.Area) > MaxAreaLength:
 		return ErrAreaTooLong
 	case d.Schedule == nil:
