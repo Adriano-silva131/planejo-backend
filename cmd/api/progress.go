@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	progressdomain "github.com/Adriano-silva131/planejo-backend/internal/progress/domain"
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	taskapp "github.com/Adriano-silva131/planejo-backend/internal/task/app"
 	taskdomain "github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
@@ -40,7 +41,7 @@ func (p progressTasks) List(ctx context.Context, userID uuid.UUID) ([]progressdo
 }
 
 func toProgressTask(t taskdomain.Task) progressdomain.Task {
-	p := progressdomain.Task{ID: t.ID, Title: t.Title}
+	p := progressdomain.Task{ID: t.ID, Title: t.Title, CreatedOn: calendar.DateOf(t.CreatedAt.UTC())}
 	switch s := t.Schedule.(type) {
 	case taskdomain.FixedSchedule:
 		p.Kind = progressdomain.FixedTask

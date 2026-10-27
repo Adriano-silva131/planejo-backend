@@ -2,7 +2,11 @@ package domain
 
 import "github.com/Adriano-silva131/planejo-backend/internal/shared/domainerr"
 
-var ErrCheckInNotFound = domainerr.New(domainerr.NotFound, "checkin_not_found", "Registro não encontrado.")
+var (
+	ErrCheckInNotFound = domainerr.New(domainerr.NotFound, "checkin_not_found", "Registro não encontrado.")
+	// ErrTaskNotFound has the task module's code, so clients see one error.
+	ErrTaskNotFound = domainerr.New(domainerr.NotFound, "task_not_found", "Tarefa não encontrada.")
+)
 
 var (
 	ErrFixedTaskCheckIn = invalid("fixed_task_checkin", "Tarefas fixas não precisam de registro: elas sempre acontecem.")

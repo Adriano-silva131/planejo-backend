@@ -32,8 +32,9 @@ type OneOffProgress struct {
 	CompletedOn calendar.Date
 }
 
-// Summarize builds the summary of the week that contains day. One-off tasks
-// show up while open and in the week they are completed.
+// Summarize builds the summary of the week that contains day. Tasks created
+// after the week are left out; one-off tasks show up while open and in the
+// week they are completed.
 func Summarize(day calendar.Date, tasks []Task, checkIns []CheckIn) WeekSummary {
 	s := WeekSummary{Start: day.StartOfWeek()}
 	s.End = s.Start.AddDays(6)
@@ -46,6 +47,9 @@ func Summarize(day calendar.Date, tasks []Task, checkIns []CheckIn) WeekSummary 
 	}
 
 	for _, t := range tasks {
+		if t.CreatedOn.After(s.End) {
+			continue
+		}
 		switch t.Kind {
 		case RecurringTask:
 			s.Recurring = append(s.Recurring, s.recurring(t, byTask[t.ID]))

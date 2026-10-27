@@ -92,6 +92,14 @@ func ParseDate(s string) (Date, error) {
 	return Date{t: t}, nil
 }
 
+// ParseOptionalDate is ParseDate where an empty string is the zero Date.
+func ParseOptionalDate(s string) (Date, error) {
+	if s == "" {
+		return Date{}, nil
+	}
+	return ParseDate(s)
+}
+
 func (d Date) IsZero() bool {
 	return d.t.IsZero()
 }
@@ -101,7 +109,11 @@ func (d Date) Time() time.Time {
 	return d.t
 }
 
+// String formats the "2006-01-02" layout; the zero Date is empty.
 func (d Date) String() string {
+	if d.IsZero() {
+		return ""
+	}
 	return d.t.Format(time.DateOnly)
 }
 

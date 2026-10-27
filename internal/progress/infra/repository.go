@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -74,6 +75,9 @@ func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn
 		},
 		clause.Returning{},
 	).Create(&m)
+	if errors.Is(res.Error, gorm.ErrForeignKeyViolated) {
+		return domain.CheckIn{}, domain.ErrTaskNotFound
+	}
 	if res.Error != nil {
 		return domain.CheckIn{}, fmt.Errorf("checkin: save: %w", res.Error)
 	}

@@ -26,6 +26,8 @@ type Task struct {
 	// TotalMinutes and Deadline describe a one-off task.
 	TotalMinutes int
 	Deadline     calendar.Date
+	// CreatedOn is the day the task was created, in UTC.
+	CreatedOn calendar.Date
 }
 
 // Tasks reads the user's tasks. Get fails with a not-found error when the

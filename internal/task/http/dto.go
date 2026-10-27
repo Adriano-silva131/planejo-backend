@@ -109,7 +109,7 @@ func (f taskFields) schedule() (domain.Schedule, error) {
 		}
 		return domain.RecurringSchedule{Weekdays: days, Duration: duration, Period: domain.Period(f.Period)}, nil
 	case domain.OneOff:
-		deadline, err := parseDate(f.Deadline)
+		deadline, err := calendar.ParseOptionalDate(f.Deadline)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +123,7 @@ func (f taskFields) fixedSchedule() (domain.Schedule, error) {
 	if err != nil {
 		return nil, err
 	}
-	date, err := parseDate(f.Date)
+	date, err := calendar.ParseOptionalDate(f.Date)
 	if err != nil {
 		return nil, err
 	}
@@ -150,13 +150,6 @@ func parseWeekdays(names []string) (calendar.Weekdays, error) {
 	return calendar.NewWeekdays(days...)
 }
 
-func parseDate(s string) (calendar.Date, error) {
-	if s == "" {
-		return calendar.Date{}, nil
-	}
-	return calendar.ParseDate(s)
-}
-
 func toBody(t domain.Task) taskBody {
 	f := taskFields{
 		Title:    t.Title,
@@ -167,7 +160,7 @@ func toBody(t domain.Task) taskBody {
 	switch s := t.Schedule.(type) {
 	case domain.FixedSchedule:
 		f.Weekdays = weekdayList(s.Weekdays)
-		f.Date = dateString(s.Date)
+		f.Date = s.Date.String()
 		f.Start, f.End = s.Start.String(), s.End.String()
 	case domain.RecurringSchedule:
 		f.Weekdays = weekdayList(s.Weekdays)
@@ -187,11 +180,4 @@ func weekdayList(w calendar.Weekdays) []string {
 		names = append(names, weekdayNames[d])
 	}
 	return names
-}
-
-func dateString(d calendar.Date) string {
-	if d.IsZero() {
-		return ""
-	}
-	return d.String()
 }

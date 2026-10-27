@@ -96,7 +96,17 @@ func TestSaveRejectsTaskOfAnotherUser(t *testing.T) {
 
 	_, err := f.repo.Save(t.Context(), domain.CheckIn{UserID: userB, TaskID: task, Date: monday})
 
-	assert.ErrorContains(t, err, "checkins_task_fkey")
+	assert.ErrorIs(t, err, domain.ErrTaskNotFound)
+}
+
+func TestSaveOnDeletedTask(t *testing.T) {
+	f := newFixture(t)
+	task := f.task(userA)
+	require.NoError(t, f.tx.Exec("DELETE FROM tasks WHERE id = ?", task).Error)
+
+	_, err := f.repo.Save(t.Context(), domain.CheckIn{UserID: userA, TaskID: task, Date: monday})
+
+	assert.ErrorIs(t, err, domain.ErrTaskNotFound)
 }
 
 func TestSaveNeverOverwritesAnotherUsersCheckIn(t *testing.T) {

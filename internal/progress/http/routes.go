@@ -115,10 +115,10 @@ func (h handler) history(ctx context.Context, in *historyInput) (*historyOutput,
 		return nil, err
 	}
 	f := domain.Filter{TaskID: taskID}
-	if f.From, err = parseOptionalDate(in.From); err != nil {
+	if f.From, err = calendar.ParseOptionalDate(in.From); err != nil {
 		return nil, err
 	}
-	if f.To, err = parseOptionalDate(in.To); err != nil {
+	if f.To, err = calendar.ParseOptionalDate(in.To); err != nil {
 		return nil, err
 	}
 	checkIns, err := h.progress.History(ctx, userID, f)

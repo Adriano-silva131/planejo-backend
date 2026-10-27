@@ -111,6 +111,18 @@ func TestSummarizeShowsOneOffUntilTheWeekItIsCompleted(t *testing.T) {
 	assert.True(t, previousWeek.OneOff[0].CompletedOn.IsZero(), "not completed yet in that week")
 }
 
+func TestSummarizeLeavesOutTasksCreatedAfterTheWeek(t *testing.T) {
+	createdNextWeek := gym
+	createdNextWeek.CreatedOn = day(7)
+	createdOnSunday := thesis
+	createdOnSunday.CreatedOn = day(6)
+
+	s := Summarize(monday, []Task{createdNextWeek, createdOnSunday}, nil)
+
+	assert.Empty(t, s.Recurring)
+	assert.Equal(t, []OneOffProgress{{Task: createdOnSunday}}, s.OneOff)
+}
+
 func TestSummarizeWithoutCheckIns(t *testing.T) {
 	s := Summarize(monday, []Task{gym, thesis}, nil)
 

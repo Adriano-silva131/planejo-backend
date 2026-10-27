@@ -160,7 +160,8 @@ func TestCheckInRecurringWithoutBody(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	body := decode(t, rec)
 	assert.Equal(t, "2026-10-20", body["date"])
-	assert.NotContains(t, body, "minutes")
+	assert.Equal(t, 0.0, body["minutes"])
+	assert.Equal(t, false, body["completed"])
 }
 
 func TestCheckInOneOffWithMinutesAndHistory(t *testing.T) {

@@ -66,6 +66,8 @@ type Filter struct {
 // Repository stores check-ins, always scoped to one user.
 type Repository interface {
 	// Save creates the check-in, or replaces the one of the same task and day.
+	// It fails with ErrTaskNotFound when the task is not the user's, or was
+	// deleted meanwhile.
 	Save(ctx context.Context, c CheckIn) (CheckIn, error)
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
 	// List returns the matching check-ins, oldest first.

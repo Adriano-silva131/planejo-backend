@@ -12,21 +12,24 @@ type checkInFields struct {
 	Completed bool `json:"completed,omitempty" doc:"Só em tarefa pontual: concluída neste dia"`
 }
 
+// checkInBody always carries minutes and completed, even when zero.
 type checkInBody struct {
-	TaskID string `json:"taskId" format:"uuid"`
-	Date   string `json:"date" format:"date"`
-	checkInFields
+	TaskID    string    `json:"taskId" format:"uuid"`
+	Date      string    `json:"date" format:"date"`
+	Minutes   int       `json:"minutes" doc:"Minutos dedicados no dia; 0 em tarefa recorrente"`
+	Completed bool      `json:"completed" doc:"Concluída neste dia; só em tarefa pontual"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func toCheckInBody(c domain.CheckIn) checkInBody {
 	return checkInBody{
-		TaskID:        c.TaskID.String(),
-		Date:          c.Date.String(),
-		checkInFields: checkInFields{Minutes: c.Minutes, Completed: c.Completed},
-		CreatedAt:     c.CreatedAt,
-		UpdatedAt:     c.UpdatedAt,
+		TaskID:    c.TaskID.String(),
+		Date:      c.Date.String(),
+		Minutes:   c.Minutes,
+		Completed: c.Completed,
+		CreatedAt: c.CreatedAt,
+		UpdatedAt: c.UpdatedAt,
 	}
 }
 
@@ -79,7 +82,7 @@ func toWeekBody(s domain.WeekSummary) weekBody {
 			Deadline:     p.Task.Deadline.String(),
 			WeekMinutes:  p.WeekMinutes,
 			DoneMinutes:  p.DoneMinutes,
-			CompletedOn:  optionalDate(p.CompletedOn),
+			CompletedOn:  p.CompletedOn.String(),
 		})
 	}
 	return b
@@ -91,19 +94,4 @@ func dateStrings(dates []calendar.Date) []string {
 		out = append(out, d.String())
 	}
 	return out
-}
-
-func optionalDate(d calendar.Date) string {
-	if d.IsZero() {
-		return ""
-	}
-	return d.String()
-}
-
-// parseOptionalDate reads a date already validated by huma; empty is zero.
-func parseOptionalDate(s string) (calendar.Date, error) {
-	if s == "" {
-		return calendar.Date{}, nil
-	}
-	return calendar.ParseDate(s)
 }

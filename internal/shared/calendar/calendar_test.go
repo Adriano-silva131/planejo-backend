@@ -52,6 +52,16 @@ func TestDate(t *testing.T) {
 	assert.True(t, Date{}.IsZero())
 }
 
+func TestZeroDateIsEmpty(t *testing.T) {
+	d, err := ParseOptionalDate("")
+
+	require.NoError(t, err)
+	assert.True(t, d.IsZero())
+	assert.Empty(t, Date{}.String())
+	_, err = ParseOptionalDate("30/10/2026")
+	assert.ErrorIs(t, err, ErrInvalidDate)
+}
+
 func TestDateRejectsInvalidValues(t *testing.T) {
 	for _, s := range []string{"2026-02-30", "30/10/2026", ""} {
 		_, err := ParseDate(s)
