@@ -11,11 +11,16 @@ import (
 	"syscall"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/config"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/logger"
+	taskapp "github.com/Adriano-silva131/planejo-backend/internal/task/app"
+	taskhttp "github.com/Adriano-silva131/planejo-backend/internal/task/http"
+	taskinfra "github.com/Adriano-silva131/planejo-backend/internal/task/infra"
 	"github.com/Adriano-silva131/planejo-backend/migrations"
 )
 
@@ -75,6 +80,7 @@ func run(cfg config.Config, log *slog.Logger) error {
 		AuthenticatedIPRateLimit: 600,
 		UserRateLimit:            300,
 	}, log)
+	registerRoutes(router, gdb)
 
 	srv := newServer(cfg.Port, router.Handler)
 	log.Info("API ouvindo", "port", cfg.Port, "env", cfg.Env)
@@ -103,6 +109,10 @@ func serve(ctx context.Context, srv *http.Server, log *slog.Logger) error {
 	}
 	log.Info("API encerrada")
 	return nil
+}
+
+func registerRoutes(router httpx.Router, gdb *gorm.DB) {
+	taskhttp.Register(router.Authenticated, taskapp.NewTasks(taskinfra.NewRepository(gdb)))
 }
 
 func newServer(port int, handler http.Handler) *http.Server {
