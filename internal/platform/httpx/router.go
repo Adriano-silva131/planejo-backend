@@ -37,6 +37,7 @@ func New(opts Options, log *slog.Logger) Router {
 	r := chi.NewRouter()
 	r.Use(
 		requestID,
+		timeZone,
 		middleware.ClientIPFromRemoteAddr,
 		requestLogger(log),
 		recoverer(log),

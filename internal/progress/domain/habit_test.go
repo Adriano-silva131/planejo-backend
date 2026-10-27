@@ -128,14 +128,14 @@ func TestHabitWeeksFollowTheScheduleOfTheirTime(t *testing.T) {
 	before := gym.Weekdays
 	gym.Weekdays, gym.TimesPerWeek = mondayToFriday, 5
 	// Three days a week until this week, when it became Monday to Friday.
-	gym.PastSchedules = []PastSchedule{{Until: monday, Weekdays: before}}
+	gym.PastSchedules = []PastSchedule{{ChangedOn: monday, Weekdays: before}}
 
 	h := BuildHabits(day(2), day(2), 2, []Task{gym}, checks(gym, -14, -12, -10, -7, -5, -3))[0]
 
 	assert.Equal(t, 3, h.Weeks[0].Target)
 	assert.True(t, h.Weeks[0].Met)
 	assert.False(t, h.Weeks[0].Days[1].Scheduled, "Tuesday was not set back then")
-	assert.Equal(t, 5, h.Weeks[1].Target)
+	assert.Equal(t, 3, h.Weeks[1].Target, "the week of the change asks for the lower of old and new")
 	assert.True(t, h.Weeks[1].Days[1].Scheduled)
 	assert.Equal(t, 2, h.Streak, "raising the target does not erase the past")
 }
@@ -143,11 +143,50 @@ func TestHabitWeeksFollowTheScheduleOfTheirTime(t *testing.T) {
 func TestHabitStartsWhenTheTaskBecameRecurring(t *testing.T) {
 	gym := gymHabit(t)
 	// Until last week it was a fixed task.
-	gym.PastSchedules = []PastSchedule{{Until: day(-7)}}
+	gym.PastSchedules = []PastSchedule{{ChangedOn: day(-7)}}
 
 	h := BuildHabits(day(2), day(2), 4, []Task{gym}, checks(gym, -21, -19, -17, -7, -5, -3))[0]
 
 	require.Len(t, h.Weeks, 2)
 	assert.Equal(t, day(-7), h.Weeks[0].Start)
+	assert.Equal(t, 1, h.Streak)
+}
+
+func TestHabitWeekOfAChangeNeverPenalizes(t *testing.T) {
+	gym := gymHabit(t)
+	twoDays := calendar.Weekdays(1<<time.Monday | 1<<time.Wednesday)
+	six, err := calendar.NewWeekdays(time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday)
+	require.NoError(t, err)
+	gym.Weekdays, gym.TimesPerWeek = six, 6
+	// Changed on Thursday of last week, after Monday and Wednesday were done.
+	gym.PastSchedules = []PastSchedule{{ChangedOn: day(-4), Weekdays: twoDays}}
+
+	h := BuildHabits(day(2), day(2), 2, []Task{gym}, checks(gym, -7, -5))[0]
+
+	assert.Equal(t, 2, h.Weeks[0].Target)
+	assert.True(t, h.Weeks[0].Met)
+	assert.Equal(t, 6, h.Weeks[1].Target)
+	assert.Equal(t, 1, h.Streak)
+}
+
+func TestHabitBecomingRecurringMidWeekAsksOnlyForTheDaysLeft(t *testing.T) {
+	gym := gymHabit(t)
+	// It was a fixed task until Saturday of last week.
+	gym.PastSchedules = []PastSchedule{{ChangedOn: day(-2)}}
+
+	h := BuildHabits(day(2), day(2), 2, []Task{gym}, checks(gym, -2, -1))[0]
+
+	require.Len(t, h.Weeks, 2)
+	assert.Equal(t, 2, h.Weeks[0].Target)
+	assert.True(t, h.Weeks[0].Met)
+	assert.Equal(t, 1, h.Streak)
+}
+
+func TestHabitStreakFarInTheFutureStopsAtTheCurrentWeek(t *testing.T) {
+	gym := gymHabit(t)
+	gym.CreatedOn = day(-7)
+
+	h := BuildHabits(day(2), calendar.NewDate(9999, time.December, 31), 2, []Task{gym}, checks(gym, -7, -5, -3))[0]
+
 	assert.Equal(t, 1, h.Streak)
 }

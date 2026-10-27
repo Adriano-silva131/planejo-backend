@@ -38,23 +38,40 @@ type Task struct {
 	PastSchedules []PastSchedule
 }
 
-// PastSchedule says the task was set for Weekdays in the weeks before Until,
-// the Monday of the week the change took effect. Empty Weekdays means it was
-// not a recurring task then.
+// PastSchedule says the task was set for Weekdays before its schedule
+// changed on ChangedOn, a day in the user's time zone. Empty Weekdays means it
+// was not a recurring task then.
 type PastSchedule struct {
-	Until    calendar.Date
-	Weekdays calendar.Weekdays
+	ChangedOn calendar.Date
+	Weekdays  calendar.Weekdays
+}
+
+// Until is the Monday of the week the change took effect: the weeks before it
+// followed this schedule.
+func (s PastSchedule) Until() calendar.Date {
+	return s.ChangedOn.StartOfWeek()
 }
 
 // weekdaysOn returns the weekdays the task was set for in the week starting
 // on start.
 func (t Task) weekdaysOn(start calendar.Date) calendar.Weekdays {
 	for _, s := range t.PastSchedules {
-		if start.Before(s.Until) {
+		if start.Before(s.Until()) {
 			return s.Weekdays
 		}
 	}
 	return t.Weekdays
+}
+
+// changeIn returns the schedule change that took effect in the week starting
+// on start, if any.
+func (t Task) changeIn(start calendar.Date) (PastSchedule, bool) {
+	for _, s := range t.PastSchedules {
+		if s.Until() == start {
+			return s, true
+		}
+	}
+	return PastSchedule{}, false
 }
 
 // Tasks reads the user's tasks. Get fails with a not-found error when the

@@ -83,35 +83,45 @@ func (p *Progress) Habits(
 		}
 		t.PastSchedules = schedules[t.ID]
 	}
-	checkIns, err := p.repo.List(ctx, userID, domain.Filter{From: oldestHabitWeek(tasks), To: day.StartOfWeek().AddDays(6)})
+	today := calendar.DateOf(p.now().In(loc))
+	ids, from := habitScope(tasks)
+	if len(ids) == 0 {
+		return domain.BuildHabits(today, day, weeks, tasks, nil), nil
+	}
+	checkIns, err := p.repo.List(ctx, userID, domain.Filter{TaskIDs: ids, From: from, To: day.StartOfWeek().AddDays(6)})
 	if err != nil {
 		return nil, err
 	}
-	return domain.BuildHabits(calendar.DateOf(p.now().In(loc)), day, weeks, tasks, checkIns), nil
+	return domain.BuildHabits(today, day, weeks, tasks, checkIns), nil
 }
 
-// oldestHabitWeek is the Monday of the oldest recurring task's creation week:
-// no grid or streak goes further back. Zero means no bound.
-func oldestHabitWeek(tasks []domain.Task) calendar.Date {
-	var oldest calendar.Date
+// habitScope returns the recurring tasks and the Monday of the oldest one's
+// creation week: no grid or streak needs other check-ins. A zero from means
+// no bound.
+func habitScope(tasks []domain.Task) (ids []uuid.UUID, from calendar.Date) {
 	for _, t := range tasks {
-		if t.Kind != domain.RecurringTask || t.CreatedOn.IsZero() {
+		if t.Kind != domain.RecurringTask {
 			continue
 		}
-		if oldest.IsZero() || t.CreatedOn.Before(oldest) {
-			oldest = t.CreatedOn
+		ids = append(ids, t.ID)
+		if !t.CreatedOn.IsZero() && (from.IsZero() || t.CreatedOn.Before(from)) {
+			from = t.CreatedOn
 		}
 	}
-	if oldest.IsZero() {
-		return oldest
+	if from.IsZero() {
+		return ids, from
 	}
-	return oldest.StartOfWeek()
+	return ids, from.StartOfWeek()
 }
 
-// ScheduleChanged keeps the weekdays a task had before its schedule changed
-// this week, so past habit weeks are judged by them. Empty weekdays mean it
-// was not recurring.
-func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before calendar.Weekdays) error {
-	until := calendar.DateOf(p.now().UTC()).StartOfWeek()
-	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{Until: until, Weekdays: before})
+// ScheduleChanged keeps the weekdays a task had when they change, so its past
+// habit weeks are judged by them. Empty weekdays mean the task is not
+// recurring; a change that keeps the weekdays is ignored. The day of the
+// change is in the time zone stored in ctx, or UTC.
+func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before, after calendar.Weekdays) error {
+	if before == after {
+		return nil
+	}
+	changedOn := calendar.DateOf(p.now().In(calendar.LocationFrom(ctx)))
+	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Weekdays: before})
 }

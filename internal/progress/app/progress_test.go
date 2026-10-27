@@ -139,21 +139,43 @@ func TestHabitsUseTheUsersTimeZone(t *testing.T) {
 	assert.True(t, habits[0].Weeks[0].Met)
 	assert.Equal(t, 1, habits[0].Streak)
 	assert.Equal(t, domain.Filter{
-		From: calendar.NewDate(2026, time.October, 19),
-		To:   calendar.NewDate(2026, time.October, 25),
-	}, repo.filter, "check-ins from the oldest habit's week")
+		TaskIDs: []uuid.UUID{reading.ID},
+		From:    calendar.NewDate(2026, time.October, 19),
+		To:      calendar.NewDate(2026, time.October, 25),
+	}, repo.filter, "only the habits' check-ins, from the oldest habit's week")
 }
 
-func TestScheduleChangedKeepsTheOldWeekdaysUntilThisWeek(t *testing.T) {
-	repo := &fakeRepo{}
-	// Wednesday 2026-10-28.
-	p := newProgress(repo, time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC))
+func TestScheduleChangedKeepsTheOldWeekdays(t *testing.T) {
+	mon := calendar.Weekdays(1 << time.Monday)
+	monWed := mon | 1<<time.Wednesday
+	// Monday 2026-11-02 at 01:00 UTC: still Sunday the 1st in São Paulo.
+	now := time.Date(2026, time.November, 2, 1, 0, 0, 0, time.UTC)
+	inSaoPaulo := calendar.WithLocation(t.Context(), time.FixedZone("BRT", -3*60*60))
+	cases := map[string]struct {
+		ctx           context.Context
+		before, after calendar.Weekdays
+		want          []domain.PastSchedule
+	}{
+		"new weekdays, user's zone": {inSaoPaulo, mon, monWed, []domain.PastSchedule{
+			{ChangedOn: calendar.NewDate(2026, time.November, 1), Weekdays: mon},
+		}},
+		"no zone, UTC": {t.Context(), mon, monWed, []domain.PastSchedule{
+			{ChangedOn: calendar.NewDate(2026, time.November, 2), Weekdays: mon},
+		}},
+		"became recurring": {t.Context(), 0, mon, []domain.PastSchedule{{ChangedOn: calendar.NewDate(2026, time.November, 2)}}},
+		"same weekdays":    {t.Context(), mon, mon, nil},
+		"never recurring":  {t.Context(), 0, 0, nil},
+	}
 
-	require.NoError(t, p.ScheduleChanged(t.Context(), userID, gym.ID, calendar.Weekdays(1<<time.Monday)))
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			repo := &fakeRepo{}
 
-	assert.Equal(t, []domain.PastSchedule{{
-		Until: calendar.NewDate(2026, time.October, 26), Weekdays: calendar.Weekdays(1 << time.Monday),
-	}}, repo.schedules[gym.ID])
+			require.NoError(t, newProgress(repo, now).ScheduleChanged(tc.ctx, userID, gym.ID, tc.before, tc.after))
+
+			assert.Equal(t, tc.want, repo.schedules[gym.ID])
+		})
+	}
 }
 
 func TestWeekLoadsCheckInsUntilTheEndOfTheWeek(t *testing.T) {

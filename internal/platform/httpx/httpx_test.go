@@ -20,6 +20,7 @@ import (
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/config"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/logger"
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/domainerr"
 )
 
@@ -243,4 +244,19 @@ func TestCORS(t *testing.T) {
 	assert.Contains(t, allowed.Header().Get("Access-Control-Allow-Headers"), "Time-Zone")
 	assert.Empty(t, allowed.Header().Get("Access-Control-Allow-Credentials"))
 	assert.Empty(t, denied.Header().Get("Access-Control-Allow-Origin"))
+}
+
+func TestTimeZoneGoesToTheContext(t *testing.T) {
+	var got []string
+	h := timeZone(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = append(got, calendar.LocationFrom(r.Context()).String())
+	}))
+
+	for _, zone := range []string{"America/Sao_Paulo", "", "Mars/Olympus", "Local"} {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
+		req.Header.Set("Time-Zone", zone)
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	assert.Equal(t, []string{"America/Sao_Paulo", "UTC", "UTC", "UTC"}, got)
 }

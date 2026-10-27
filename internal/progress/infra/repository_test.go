@@ -143,6 +143,8 @@ func TestListFilters(t *testing.T) {
 		dates(f.list(userA, domain.Filter{TaskID: gym})))
 	assert.Equal(t, []calendar.Date{monday.AddDays(1), monday.AddDays(2)},
 		dates(f.list(userA, domain.Filter{From: monday.AddDays(1), To: monday.AddDays(6)})))
+	assert.Equal(t, []calendar.Date{monday.AddDays(1)},
+		dates(f.list(userA, domain.Filter{TaskIDs: []uuid.UUID{reading}})))
 }
 
 func TestDelete(t *testing.T) {
@@ -176,20 +178,20 @@ func TestSchedules(t *testing.T) {
 	monWed, err := calendar.NewWeekdays(time.Monday, time.Wednesday)
 	require.NoError(t, err)
 
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{Until: monday.AddDays(7), Weekdays: monWed}))
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{Until: monday, Weekdays: mon}))
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{Until: monday, Weekdays: monWed}),
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(9), Weekdays: monWed}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(1), Weekdays: mon}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(3), Weekdays: monWed}),
 		"a second change in the same week keeps the first")
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userB, other, domain.PastSchedule{Until: monday}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userB, other, domain.PastSchedule{ChangedOn: monday}))
 
 	got, err := f.repo.Schedules(t.Context(), userA)
 
 	require.NoError(t, err)
 	assert.Equal(t, map[uuid.UUID][]domain.PastSchedule{task: {
-		{Until: monday, Weekdays: mon},
-		{Until: monday.AddDays(7), Weekdays: monWed},
+		{ChangedOn: monday.AddDays(1), Weekdays: mon},
+		{ChangedOn: monday.AddDays(9), Weekdays: monWed},
 	}}, got)
 	// Last: the foreign key violation aborts the test's transaction.
-	assert.ErrorIs(t, f.repo.SaveSchedule(t.Context(), userB, task, domain.PastSchedule{Until: monday.AddDays(14)}),
+	assert.ErrorIs(t, f.repo.SaveSchedule(t.Context(), userB, task, domain.PastSchedule{ChangedOn: monday.AddDays(14)}),
 		domain.ErrTaskNotFound)
 }

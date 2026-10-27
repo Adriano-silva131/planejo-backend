@@ -59,8 +59,10 @@ func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date) (Chec
 // Filter narrows a listing. Zero fields do not filter; dates are inclusive.
 type Filter struct {
 	TaskID uuid.UUID
-	From   calendar.Date
-	To     calendar.Date
+	// TaskIDs keeps only the check-ins of these tasks.
+	TaskIDs []uuid.UUID
+	From    calendar.Date
+	To      calendar.Date
 }
 
 // Repository stores check-ins, always scoped to one user.

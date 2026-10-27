@@ -4,6 +4,7 @@ package calendar
 
 import (
 	"fmt"
+	"math/bits"
 	"slices"
 	"time"
 )
@@ -30,14 +31,20 @@ func (w Weekdays) IsEmpty() bool {
 	return w == 0
 }
 
+// Days returns the days in w, Monday first, as the weeks are.
 func (w Weekdays) Days() []time.Weekday {
 	var days []time.Weekday
-	for d := time.Sunday; d <= time.Saturday; d++ {
-		if w.Has(d) {
+	for i := range 7 {
+		if d := time.Weekday((i + 1) % 7); w.Has(d) {
 			days = append(days, d)
 		}
 	}
 	return days
+}
+
+// Count is how many days are in w.
+func (w Weekdays) Count() int {
+	return bits.OnesCount8(uint8(w))
 }
 
 var weekdayNames = [...]string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"}
@@ -60,7 +67,7 @@ func ParseWeekdayNames(names []string) (Weekdays, error) {
 	return NewWeekdays(days...)
 }
 
-// Names returns the names of the days in w, Sunday first; nil when empty.
+// Names returns the names of the days in w, Monday first; nil when empty.
 func (w Weekdays) Names() []string {
 	var names []string
 	for _, d := range w.Days() {
@@ -99,7 +106,8 @@ func (t TimeOfDay) String() string {
 	return fmt.Sprintf("%02d:%02d", int(t)/60, int(t)%60)
 }
 
-// Date is a calendar day, without time or time zone.
+// Date is a calendar day, without time or time zone. Dates are comparable
+// with == and can be map keys.
 type Date struct {
 	t time.Time
 }

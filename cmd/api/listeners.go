@@ -11,42 +11,32 @@ import (
 	taskdomain "github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
-// routineListener drops the routine adjustments that no longer apply.
+// routineListener tells the routine about a schedule change, with the task as
+// the routine sees it.
 type routineListener struct {
 	routine *routineapp.Routine
 }
 
 func (l routineListener) ScheduleChanged(ctx context.Context, userID uuid.UUID, _, after taskdomain.Task) error {
-	return l.routine.ScheduleChanged(ctx, userID, after.ID)
+	if fixed, ok := toFixedTask(after); ok {
+		return l.routine.ScheduleChanged(ctx, userID, after.ID, &fixed)
+	}
+	return l.routine.ScheduleChanged(ctx, userID, after.ID, nil)
 }
 
-// progressListener keeps the weekdays a habit had, so its past weeks are
-// judged by them.
+// progressListener tells progress the weekdays a habit had and has.
 type progressListener struct {
 	progress *progressapp.Progress
 }
 
 func (l progressListener) ScheduleChanged(ctx context.Context, userID uuid.UUID, before, after taskdomain.Task) error {
-	weekdays, ok := pastHabitWeekdays(before, after)
-	if !ok {
-		return nil
-	}
-	return l.progress.ScheduleChanged(ctx, userID, after.ID, weekdays)
+	return l.progress.ScheduleChanged(ctx, userID, after.ID, recurringWeekdays(before), recurringWeekdays(after))
 }
 
-// pastHabitWeekdays returns the weekdays to keep for a schedule change that
-// matters to habits: one into, out of or within a recurring schedule that
-// changes its weekdays. Empty weekdays mean the task was not recurring.
-func pastHabitWeekdays(before, after taskdomain.Task) (calendar.Weekdays, bool) {
-	b, wasRecurring := before.Schedule.(taskdomain.RecurringSchedule)
-	a, isRecurring := after.Schedule.(taskdomain.RecurringSchedule)
-	switch {
-	case !wasRecurring && !isRecurring:
-		return 0, false
-	case wasRecurring && isRecurring && b.Weekdays == a.Weekdays:
-		return 0, false
-	case !wasRecurring:
-		return 0, true
+// recurringWeekdays returns the weekdays of a recurring task; empty for others.
+func recurringWeekdays(t taskdomain.Task) calendar.Weekdays {
+	if s, ok := t.Schedule.(taskdomain.RecurringSchedule); ok {
+		return s.Weekdays
 	}
-	return b.Weekdays, true
+	return 0
 }

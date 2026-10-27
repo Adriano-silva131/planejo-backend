@@ -51,7 +51,7 @@ func toProgressTask(t taskdomain.Task) progressdomain.Task {
 	case taskdomain.RecurringSchedule:
 		p.Kind = progressdomain.RecurringTask
 		p.Weekdays = s.Weekdays
-		p.TimesPerWeek = len(s.Weekdays.Days())
+		p.TimesPerWeek = s.Weekdays.Count()
 	case taskdomain.OneOffSchedule:
 		p.Kind = progressdomain.OneOffTask
 		p.TotalMinutes = int(s.Duration / time.Minute)
