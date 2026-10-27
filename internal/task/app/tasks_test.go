@@ -54,6 +54,10 @@ func (r *fakeRepo) All(_ context.Context, userID uuid.UUID) ([]domain.Task, erro
 	return out, nil
 }
 
+func (r *fakeRepo) Areas(context.Context, uuid.UUID) ([]domain.AreaUsage, error) {
+	return nil, nil
+}
+
 func (r *fakeRepo) Update(_ context.Context, t domain.Task) (domain.Task, error) {
 	r.updateCalled = true
 	r.tasks[t.ID] = t
@@ -71,6 +75,7 @@ func gym(t *testing.T) domain.Details {
 	require.NoError(t, err)
 	return domain.Details{
 		Title:    "Academia",
+		Area:     "Saúde",
 		Priority: domain.High,
 		Schedule: domain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
 	}
@@ -89,7 +94,7 @@ func TestCreateStoresValidTask(t *testing.T) {
 func TestCreateRejectsInvalidTask(t *testing.T) {
 	repo := newFakeRepo()
 
-	_, err := NewTasks(repo).Create(t.Context(), userID, domain.Details{Title: "Academia"})
+	_, err := NewTasks(repo).Create(t.Context(), userID, domain.Details{Title: "Academia", Area: "Saúde"})
 
 	assert.ErrorIs(t, err, domain.ErrScheduleRequired)
 	assert.Empty(t, repo.tasks)

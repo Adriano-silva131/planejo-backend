@@ -40,16 +40,16 @@ func details(t *testing.T) map[string]domain.Details {
 		"fixed weekly": {Title: "Trabalho", Area: "Trabalho", Schedule: domain.FixedSchedule{
 			Weekdays: weekdays(t, time.Monday, time.Friday), Start: 9 * 60, End: 18 * 60,
 		}},
-		"fixed on date": {Title: "Consulta", Schedule: domain.FixedSchedule{
+		"fixed on date": {Title: "Consulta", Area: "Saúde", Schedule: domain.FixedSchedule{
 			Date: calendar.NewDate(2026, time.November, 5), Start: 15 * 60, End: 16 * 60,
 		}},
 		"recurring": {Title: "Academia", Area: "Saúde", Priority: domain.High, Schedule: domain.RecurringSchedule{
 			Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
 		}},
-		"recurring without period": {Title: "Leitura", Priority: domain.Low, Schedule: domain.RecurringSchedule{
+		"recurring without period": {Title: "Leitura", Area: "Pessoal", Priority: domain.Low, Schedule: domain.RecurringSchedule{
 			Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
 		}},
-		"one-off": {Title: "Relatório", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
+		"one-off": {Title: "Relatório", Area: "Trabalho", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
 			Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
 		}},
 	}
@@ -183,4 +183,32 @@ func TestAllReturnsEveryTaskOfTheUser(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []uuid.UUID{second.ID, first.ID}, ids(tasks))
+}
+
+func TestAreasCountsTheUsersAreasMostUsedFirst(t *testing.T) {
+	repo := newRepo(t)
+	d := details(t)
+	for _, name := range []string{"recurring", "fixed on date", "one-off", "fixed weekly"} {
+		create(t, repo, userA, d[name])
+	}
+	other := d["recurring"]
+	other.Area = "Só do B"
+	create(t, repo, userB, other)
+
+	areas, err := repo.Areas(t.Context(), userA)
+
+	require.NoError(t, err)
+	assert.Equal(t, []domain.AreaUsage{{Area: "Saúde", Tasks: 2}, {Area: "Trabalho", Tasks: 2}}, areas)
+}
+
+func TestDatabaseAcceptsFixedTaskEndingTheNextDay(t *testing.T) {
+	repo := newRepo(t)
+	sleep := details(t)["fixed weekly"]
+	sleep.Schedule = domain.FixedSchedule{Weekdays: weekdays(t, time.Sunday), Start: 23 * 60, End: 7 * 60}
+
+	created := create(t, repo, userA, sleep)
+	got, err := repo.Get(t.Context(), userA, created.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, sleep, got.Details)
 }

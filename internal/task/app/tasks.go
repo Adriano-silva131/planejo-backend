@@ -39,6 +39,11 @@ func (s *Tasks) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, error
 	return s.repo.All(ctx, userID)
 }
 
+// Areas lists the areas the user has used, for the client to suggest.
+func (s *Tasks) Areas(ctx context.Context, userID uuid.UUID) ([]domain.AreaUsage, error) {
+	return s.repo.Areas(ctx, userID)
+}
+
 func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Details) (domain.Task, error) {
 	task, err := s.repo.Get(ctx, userID, id)
 	if err != nil {

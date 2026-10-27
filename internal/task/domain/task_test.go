@@ -45,6 +45,7 @@ func work(t *testing.T) Details {
 	t.Helper()
 	return Details{
 		Title: "Trabalho",
+		Area:  "Trabalho",
 		Schedule: FixedSchedule{
 			Weekdays: weekdays(t, time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday),
 			Start:    clock(t, "09:00"),
@@ -56,6 +57,7 @@ func work(t *testing.T) Details {
 func report() Details {
 	return Details{
 		Title:    "Entregar relatório",
+		Area:     "Trabalho",
 		Priority: Medium,
 		Schedule: OneOffSchedule{Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)},
 	}
@@ -106,6 +108,7 @@ func TestNewRejectsInvalidDetails(t *testing.T) {
 	}{
 		"blank title":         {func(d *Details) { d.Title = "   " }, ErrTitleRequired},
 		"long title":          {func(d *Details) { d.Title = strings.Repeat("a", MaxTitleLength+1) }, ErrTitleTooLong},
+		"blank area":          {func(d *Details) { d.Area = "  " }, ErrAreaRequired},
 		"long area":           {func(d *Details) { d.Area = strings.Repeat("á", MaxAreaLength+1) }, ErrAreaTooLong},
 		"no schedule":         {func(d *Details) { d.Schedule = nil }, ErrScheduleRequired},
 		"no priority":         {func(d *Details) { d.Priority = "" }, ErrPriorityRequired},
@@ -144,6 +147,16 @@ func setRecurringPeriod(t *testing.T, period Period) func(*Details) {
 	}
 }
 
+func TestNewAcceptsFixedTaskEndingTheNextDay(t *testing.T) {
+	d := work(t)
+	d.Title, d.Area = "Dormir", "Descanso"
+	d.Schedule = FixedSchedule{Weekdays: weekdays(t, time.Sunday), Start: clock(t, "23:00"), End: clock(t, "07:00")}
+
+	_, err := New(testUserID, d)
+
+	assert.NoError(t, err)
+}
+
 func TestNewRejectsInvalidFixedTasks(t *testing.T) {
 	mon := weekdays(t, time.Monday)
 	day := calendar.NewDate(2026, time.November, 5)
@@ -155,14 +168,13 @@ func TestNewRejectsInvalidFixedTasks(t *testing.T) {
 		"with priority":     {High, FixedSchedule{Weekdays: mon, Start: clock(t, "09:00"), End: clock(t, "10:00")}, ErrFixedTaskPriority},
 		"no days nor date":  {"", FixedSchedule{Start: clock(t, "09:00"), End: clock(t, "10:00")}, ErrFixedTaskDays},
 		"days and date":     {"", FixedSchedule{Weekdays: mon, Date: day, Start: clock(t, "09:00"), End: clock(t, "10:00")}, ErrFixedTaskDays},
-		"end before start":  {"", FixedSchedule{Weekdays: mon, Start: clock(t, "10:00"), End: clock(t, "09:00")}, ErrInvalidTimeRange},
 		"empty range":       {"", FixedSchedule{Weekdays: mon, Start: clock(t, "10:00"), End: clock(t, "10:00")}, ErrInvalidTimeRange},
 		"time out of range": {"", FixedSchedule{Weekdays: mon, Start: clock(t, "09:00"), End: 24 * 60}, calendar.ErrInvalidTime},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := New(testUserID, Details{Title: "Trabalho", Priority: tc.priority, Schedule: tc.schedule})
+			_, err := New(testUserID, Details{Title: "Trabalho", Area: "Trabalho", Priority: tc.priority, Schedule: tc.schedule})
 
 			assert.ErrorIs(t, err, tc.want)
 		})

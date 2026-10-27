@@ -41,8 +41,8 @@ func (f fixture) task(userID uuid.UUID) uuid.UUID {
 	f.t.Helper()
 	id := uuid.New()
 	require.NoError(f.t, f.tx.Exec(
-		`INSERT INTO tasks (id, user_id, title, kind, priority, weekdays, duration_minutes)
-		 VALUES (?, ?, 'Academia', 'recurring', 'high', 2, 60)`, id, userID).Error)
+		`INSERT INTO tasks (id, user_id, title, area, kind, priority, weekdays, duration_minutes)
+		 VALUES (?, ?, 'Academia', 'Saúde', 'recurring', 'high', 2, 60)`, id, userID).Error)
 	return id
 }
 

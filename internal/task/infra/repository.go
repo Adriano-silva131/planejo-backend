@@ -72,6 +72,20 @@ func (r *Repository) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, 
 	return toDomainList(models)
 }
 
+func (r *Repository) Areas(ctx context.Context, userID uuid.UUID) ([]domain.AreaUsage, error) {
+	var areas []domain.AreaUsage
+	err := db.Conn(ctx, r.db).Model(&taskModel{}).
+		Select("area, count(*) AS tasks").
+		Where("user_id = ?", userID).
+		Group("area").
+		Order("tasks DESC, area").
+		Scan(&areas).Error
+	if err != nil {
+		return nil, fmt.Errorf("task: areas: %w", err)
+	}
+	return areas, nil
+}
+
 func toDomainList(models []taskModel) ([]domain.Task, error) {
 	tasks := make([]domain.Task, 0, len(models))
 	for _, m := range models {

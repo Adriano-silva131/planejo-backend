@@ -31,6 +31,11 @@ func Register(api huma.API, tasks *app.Tasks) {
 		Summary: "Lista as tarefas, da mais nova para a mais antiga",
 	}, h.list)
 	huma.Register(api, huma.Operation{
+		OperationID: "list-task-areas", Method: http.MethodGet, Path: "/tasks/areas", Tags: tags,
+		Summary:     "Lista as áreas já usadas, da mais usada para a menos usada",
+		Description: "Para o app sugerir enquanto o usuário digita a área de uma tarefa.",
+	}, h.areas)
+	huma.Register(api, huma.Operation{
 		OperationID: "get-task", Method: http.MethodGet, Path: "/tasks/{id}", Tags: tags,
 		Summary: "Retorna uma tarefa", Errors: []int{http.StatusNotFound},
 	}, h.get)
@@ -112,6 +117,34 @@ func (h handler) list(ctx context.Context, in *listInput) (*listOutput, error) {
 		out.Body.Data = append(out.Body.Data, toBody(t))
 	}
 	out.Body.Meta = pageMeta{Total: total, Page: in.Page, PerPage: in.PerPage}
+	return out, nil
+}
+
+type areaBody struct {
+	Area  string `json:"area" example:"Saúde"`
+	Tasks int    `json:"tasks" doc:"Tarefas com esta área" example:"3"`
+}
+
+type areasOutput struct {
+	Body struct {
+		Data []areaBody `json:"data"`
+	}
+}
+
+func (h handler) areas(ctx context.Context, _ *struct{}) (*areasOutput, error) {
+	userID, err := currentUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	areas, err := h.tasks.Areas(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := &areasOutput{}
+	out.Body.Data = make([]areaBody, 0, len(areas))
+	for _, a := range areas {
+		out.Body.Data = append(out.Body.Data, areaBody{Area: a.Area, Tasks: a.Tasks})
+	}
 	return out, nil
 }
 
