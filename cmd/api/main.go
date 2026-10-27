@@ -120,7 +120,7 @@ func serve(ctx context.Context, srv *http.Server, log *slog.Logger) error {
 }
 
 func registerRoutes(router httpx.Router, gdb *gorm.DB) {
-	tasks := taskapp.NewTasks(taskinfra.NewRepository(gdb))
+	tasks := taskapp.NewTasks(taskinfra.NewRepository(gdb), db.NewTransactor(gdb))
 	taskhttp.Register(router.Authenticated, tasks)
 
 	progress := progressapp.NewProgress(progressTasks{tasks: tasks}, progressinfra.NewRepository(gdb))
@@ -128,6 +128,7 @@ func registerRoutes(router httpx.Router, gdb *gorm.DB) {
 
 	routine := routineapp.NewRoutine(routineTasks{tasks: tasks}, routineinfra.NewRepository(gdb))
 	routinehttp.Register(router.Authenticated, routine)
+	tasks.OnScheduleChange(routine)
 }
 
 func newServer(port int, handler http.Handler) *http.Server {

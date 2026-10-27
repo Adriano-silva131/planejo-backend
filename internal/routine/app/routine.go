@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 
@@ -23,12 +24,13 @@ func NewRoutine(tasks domain.Tasks, repo domain.Repository) *Routine {
 // Week builds the week that contains day. Adjustments start on the Sunday
 // before, whose overnight occurrences end in this week.
 func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date) (domain.Week, error) {
-	tasks, err := r.tasks.Fixed(ctx, userID)
+	monday := day.StartOfWeek()
+	from, to := monday.AddDays(-1), monday.AddDays(6)
+	tasks, err := r.tasks.Fixed(ctx, userID, from, to)
 	if err != nil {
 		return domain.Week{}, err
 	}
-	monday := day.StartOfWeek()
-	adjustments, err := r.repo.List(ctx, userID, monday.AddDays(-1), monday.AddDays(6))
+	adjustments, err := r.repo.List(ctx, userID, from, to)
 	if err != nil {
 		return domain.Week{}, err
 	}
@@ -49,6 +51,29 @@ func (r *Routine) Adjust(
 		return domain.Adjustment{}, err
 	}
 	return r.repo.Save(ctx, a)
+}
+
+// ScheduleChanged drops the adjustments that no longer apply after the task's
+// schedule changed: all of them when it is no longer fixed, and those of
+// dates that are no longer occurrences otherwise.
+func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID) error {
+	adjustments, err := r.repo.ForTask(ctx, userID, taskID)
+	if err != nil || len(adjustments) == 0 {
+		return err
+	}
+	task, err := r.tasks.Get(ctx, userID, taskID)
+	notFixed := errors.Is(err, domain.ErrNotFixedTask)
+	if err != nil && !notFixed {
+		return err
+	}
+	for _, a := range adjustments {
+		if notFixed || !task.OccursOn(a.Date) {
+			if err := r.repo.Delete(ctx, userID, taskID, a.Date); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Reset brings the occurrence back to the task's pattern.

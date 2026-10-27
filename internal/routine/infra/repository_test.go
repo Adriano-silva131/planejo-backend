@@ -146,3 +146,23 @@ func TestDeletingTheTaskRemovesItsAdjustments(t *testing.T) {
 
 	assert.Empty(t, f.list(userA))
 }
+
+func TestForTask(t *testing.T) {
+	f := newFixture(t)
+	task, other := f.task(userA), f.task(userA)
+	for _, date := range []calendar.Date{monday.AddDays(30), monday} {
+		_, err := f.repo.Save(t.Context(), moved(userA, task, date))
+		require.NoError(t, err)
+	}
+	_, err := f.repo.Save(t.Context(), moved(userA, other, monday))
+	require.NoError(t, err)
+
+	mine, err := f.repo.ForTask(t.Context(), userA, task)
+	require.NoError(t, err)
+	none, err := f.repo.ForTask(t.Context(), userB, task)
+	require.NoError(t, err)
+
+	require.Len(t, mine, 2)
+	assert.Equal(t, monday, mine[0].Date)
+	assert.Empty(t, none)
+}

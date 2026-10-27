@@ -14,6 +14,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -193,4 +194,32 @@ func TestMigrateLogsMigrationsAppliedBeforeAFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, logs.String(), "00001_create_a.sql")
 	assert.NotContains(t, logs.String(), "00002_broken.sql")
+}
+
+type ownedRow struct {
+	ID     string `gorm:"primaryKey"`
+	UserID uuid.UUID
+	Value  int
+}
+
+func (ownedRow) TableName() string {
+	return "owned_rows"
+}
+
+func TestOwnedUpsert(t *testing.T) {
+	require.NoError(t, testDB.Exec("CREATE TABLE owned_rows (id text PRIMARY KEY, user_id uuid NOT NULL, value int)").Error)
+	t.Cleanup(func() { testDB.Exec("DROP TABLE owned_rows") })
+	upsert := OwnedUpsert{Table: "owned_rows", Conflict: []string{"id"}, Update: []string{"value"}}
+	owner, other := uuid.New(), uuid.New()
+
+	require.NoError(t, upsert.Save(t.Context(), testDB, &ownedRow{ID: "a", UserID: owner, Value: 1}, owner))
+	updated := ownedRow{ID: "a", UserID: owner, Value: 2}
+	require.NoError(t, upsert.Save(t.Context(), testDB, &updated, owner))
+	err := upsert.Save(t.Context(), testDB, &ownedRow{ID: "a", UserID: other, Value: 99}, other)
+
+	assert.ErrorIs(t, err, ErrNotOwned)
+	var got ownedRow
+	require.NoError(t, testDB.Take(&got, "id = ?", "a").Error)
+	assert.Equal(t, 2, got.Value, "the owner's row is kept")
+	assert.Equal(t, 2, updated.Value, "read back with RETURNING")
 }

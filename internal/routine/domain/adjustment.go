@@ -58,4 +58,6 @@ type Repository interface {
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
 	// List returns the adjustments of occurrences starting from from to to.
 	List(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]Adjustment, error)
+	// ForTask returns every adjustment of the task.
+	ForTask(ctx context.Context, userID, taskID uuid.UUID) ([]Adjustment, error)
 }

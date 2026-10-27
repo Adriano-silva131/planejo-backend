@@ -212,3 +212,20 @@ func TestDatabaseAcceptsFixedTaskEndingTheNextDay(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, sleep, got.Details)
 }
+
+func TestFixedReturnsWhatMayOccurInThePeriod(t *testing.T) {
+	repo := newRepo(t)
+	d := details(t)
+	weekly := create(t, repo, userA, d["fixed weekly"])
+	onDate := create(t, repo, userA, d["fixed on date"]) // 2026-11-05
+	create(t, repo, userA, d["recurring"])
+	create(t, repo, userB, d["fixed weekly"])
+
+	inPeriod, err := repo.Fixed(t.Context(), userA, calendar.NewDate(2026, time.November, 1), calendar.NewDate(2026, time.November, 8))
+	require.NoError(t, err)
+	before, err := repo.Fixed(t.Context(), userA, calendar.NewDate(2026, time.October, 25), calendar.NewDate(2026, time.November, 1))
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, []uuid.UUID{weekly.ID, onDate.ID}, ids(inPeriod))
+	assert.Equal(t, []uuid.UUID{weekly.ID}, ids(before))
+}

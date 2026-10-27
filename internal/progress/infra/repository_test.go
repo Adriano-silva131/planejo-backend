@@ -116,7 +116,7 @@ func TestSaveNeverOverwritesAnotherUsersCheckIn(t *testing.T) {
 
 	_, err := f.repo.Save(t.Context(), domain.CheckIn{UserID: userB, TaskID: task, Date: monday, Minutes: 999})
 
-	require.ErrorIs(t, err, domain.ErrCheckInNotFound)
+	require.ErrorIs(t, err, domain.ErrTaskNotFound)
 	assert.Equal(t, 30, f.list(userA, domain.Filter{})[0].Minutes)
 }
 

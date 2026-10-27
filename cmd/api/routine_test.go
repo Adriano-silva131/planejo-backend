@@ -20,7 +20,7 @@ func TestToFixedTask(t *testing.T) {
 	sleep := taskdomain.Task{ID: id, Details: taskdomain.Details{
 		Title: "Dormir", Area: "Descanso",
 		Schedule: taskdomain.FixedSchedule{Weekdays: days, Start: 23 * 60, End: 7 * 60},
-	}}
+	}, CreatedAt: time.Date(2026, time.October, 27, 1, 30, 0, 0, time.UTC)}
 	gym := taskdomain.Task{ID: uuid.New(), Details: taskdomain.Details{
 		Title: "Academia", Area: "Saúde", Priority: taskdomain.High,
 		Schedule: taskdomain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
@@ -32,6 +32,7 @@ func TestToFixedTask(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, routinedomain.FixedTask{
 		ID: id, Title: "Dormir", Area: "Descanso", Weekdays: days, Start: 23 * 60, End: 7 * 60,
+		CreatedOn: calendar.NewDate(2026, time.October, 27),
 	}, fixed)
 	assert.False(t, recurring, "only fixed tasks are part of the routine")
 }

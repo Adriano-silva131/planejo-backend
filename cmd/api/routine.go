@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	routinedomain "github.com/Adriano-silva131/planejo-backend/internal/routine/domain"
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	taskapp "github.com/Adriano-silva131/planejo-backend/internal/task/app"
 	taskdomain "github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
@@ -18,8 +19,10 @@ type routineTasks struct {
 
 var _ routinedomain.Tasks = routineTasks{}
 
-func (r routineTasks) Fixed(ctx context.Context, userID uuid.UUID) ([]routinedomain.FixedTask, error) {
-	tasks, err := r.tasks.All(ctx, userID)
+func (r routineTasks) Fixed(
+	ctx context.Context, userID uuid.UUID, from, to calendar.Date,
+) ([]routinedomain.FixedTask, error) {
+	tasks, err := r.tasks.Fixed(ctx, userID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -57,5 +60,7 @@ func toFixedTask(t taskdomain.Task) (routinedomain.FixedTask, bool) {
 		Date:     s.Date,
 		Start:    s.Start,
 		End:      s.End,
+
+		CreatedOn: calendar.DateOf(t.CreatedAt.UTC()),
 	}, true
 }

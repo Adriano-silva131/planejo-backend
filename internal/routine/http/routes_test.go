@@ -53,7 +53,7 @@ type ownedTask struct {
 // fakeTasks stands in for the task module, which main wires in production.
 type fakeTasks map[uuid.UUID]ownedTask
 
-func (f fakeTasks) Fixed(_ context.Context, userID uuid.UUID) ([]domain.FixedTask, error) {
+func (f fakeTasks) Fixed(_ context.Context, userID uuid.UUID, _, _ calendar.Date) ([]domain.FixedTask, error) {
 	var out []domain.FixedTask
 	for _, t := range f {
 		if t.owner == userID {

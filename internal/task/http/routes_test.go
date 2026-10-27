@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/app"
@@ -57,7 +58,8 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewTasks(infra.NewRepository(dbtest.Tx(t))))
+	tx := dbtest.Tx(t)
+	Register(router.Authenticated, app.NewTasks(infra.NewRepository(tx), db.NewTransactor(tx)))
 	return server{t: t, handler: router.Handler}
 }
 

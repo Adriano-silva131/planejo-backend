@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -22,15 +23,21 @@ var (
 	}
 )
 
-type fakeTasks struct{}
+// fakeTasks knows class; with notFixed set, class is no longer fixed.
+type fakeTasks struct {
+	notFixed bool
+}
 
-func (fakeTasks) Fixed(context.Context, uuid.UUID) ([]domain.FixedTask, error) {
+func (fakeTasks) Fixed(context.Context, uuid.UUID, calendar.Date, calendar.Date) ([]domain.FixedTask, error) {
 	return []domain.FixedTask{class}, nil
 }
 
-func (fakeTasks) Get(_ context.Context, _, id uuid.UUID) (domain.FixedTask, error) {
-	if id != class.ID {
+func (f fakeTasks) Get(_ context.Context, _, id uuid.UUID) (domain.FixedTask, error) {
+	switch {
+	case id != class.ID:
 		return domain.FixedTask{}, domain.ErrTaskNotFound
+	case f.notFixed:
+		return domain.FixedTask{}, domain.ErrNotFixedTask
 	}
 	return class, nil
 }
@@ -45,8 +52,13 @@ func (r *fakeRepo) Save(_ context.Context, a domain.Adjustment) (domain.Adjustme
 	return a, nil
 }
 
-func (r *fakeRepo) Delete(context.Context, uuid.UUID, uuid.UUID, calendar.Date) error {
+func (r *fakeRepo) Delete(_ context.Context, _, _ uuid.UUID, date calendar.Date) error {
+	r.saved = slices.DeleteFunc(r.saved, func(a domain.Adjustment) bool { return a.Date.Equal(date) })
 	return nil
+}
+
+func (r *fakeRepo) ForTask(context.Context, uuid.UUID, uuid.UUID) ([]domain.Adjustment, error) {
+	return r.saved, nil
 }
 
 func (r *fakeRepo) List(_ context.Context, _ uuid.UUID, from, to calendar.Date) ([]domain.Adjustment, error) {
@@ -89,5 +101,26 @@ func TestAdjustValidatesBeforeSaving(t *testing.T) {
 
 	assert.ErrorIs(t, notOccurrence, domain.ErrNotAnOccurrence)
 	assert.ErrorIs(t, unknown, domain.ErrTaskNotFound)
+	assert.Empty(t, repo.saved)
+}
+
+func TestScheduleChangedDropsAdjustmentsOfDatesThatNoLongerOccur(t *testing.T) {
+	// class is on Mondays; the Tuesday adjustment is left from an older schedule.
+	repo := &fakeRepo{saved: []domain.Adjustment{
+		{TaskID: class.ID, Date: monday, Skipped: true},
+		{TaskID: class.ID, Date: monday.AddDays(1), Skipped: true},
+	}}
+
+	require.NoError(t, NewRoutine(fakeTasks{}, repo).ScheduleChanged(t.Context(), userID, class.ID))
+
+	require.Len(t, repo.saved, 1)
+	assert.Equal(t, monday, repo.saved[0].Date)
+}
+
+func TestScheduleChangedDropsEverythingWhenNoLongerFixed(t *testing.T) {
+	repo := &fakeRepo{saved: []domain.Adjustment{{TaskID: class.ID, Date: monday, Skipped: true}}}
+
+	require.NoError(t, NewRoutine(fakeTasks{notFixed: true}, repo).ScheduleChanged(t.Context(), userID, class.ID))
+
 	assert.Empty(t, repo.saved)
 }

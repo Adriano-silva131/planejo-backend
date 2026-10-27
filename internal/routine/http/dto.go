@@ -97,14 +97,14 @@ type dayBody struct {
 	Blocks  []blockBody `json:"blocks" doc:"Em ordem de início"`
 }
 
-type weekBody struct {
+type routineWeekBody struct {
 	Start string    `json:"start" format:"date" doc:"Segunda-feira da semana"`
 	End   string    `json:"end" format:"date" doc:"Domingo da semana"`
 	Days  []dayBody `json:"days" doc:"Os 7 dias, de segunda a domingo"`
 }
 
-func toWeekBody(w domain.Week) weekBody {
-	b := weekBody{Start: w.Start.String(), End: w.End.String(), Days: make([]dayBody, 0, len(w.Days))}
+func toWeekBody(w domain.Week) routineWeekBody {
+	b := routineWeekBody{Start: w.Start.String(), End: w.End.String(), Days: make([]dayBody, 0, len(w.Days))}
 	for _, d := range w.Days {
 		day := dayBody{
 			Date:    d.Date.String(),

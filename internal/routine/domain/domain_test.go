@@ -90,6 +90,7 @@ func TestBuildWeekEndingAtMidnightHasNoSecondPart(t *testing.T) {
 	w := BuildWeek(monday, []FixedTask{late}, nil)
 
 	assert.Equal(t, []slot{{"Série", "22:00", "24:00"}}, slots(w.Days[4]))
+	assert.False(t, w.Days[4].Blocks[0].ContinuesNextDay)
 	assert.Empty(t, slots(w.Days[5]))
 }
 
@@ -109,8 +110,28 @@ func TestBuildWeekAppliesAdjustments(t *testing.T) {
 	assert.False(t, w.Days[3].Blocks[0].Adjusted)
 	assert.Empty(t, slots(w.Days[5]), "adjustments of non-occurrences are ignored")
 
+	backToPattern := BuildWeek(monday, []FixedTask{work}, []Adjustment{
+		{TaskID: work.ID, Date: day(1), Start: work.Start, End: work.End},
+	})
+	assert.False(t, backToPattern.Days[1].Blocks[0].Adjusted, "same times as the pattern")
+
 	nextWeek := BuildWeek(day(7), []FixedTask{work, class}, nil)
 	assert.Len(t, nextWeek.Days[0].Blocks, 2, "the pattern is unchanged")
+}
+
+func TestWeeklyTasksStartOnTheWeekTheyWereCreated(t *testing.T) {
+	work, _, _, doctor, _ := fixtures(t)
+	work.CreatedOn = day(9) // Wednesday of next week
+	doctor.CreatedOn = day(9)
+
+	thisWeek := BuildWeek(monday, []FixedTask{work, doctor}, nil)
+	creationWeek := BuildWeek(day(7), []FixedTask{work}, nil)
+	_, err := NewAdjustment(userID, work, day(0), Change{Skip: true})
+
+	assert.Equal(t, []slot{{"Consulta", "15:00", "16:00"}}, slots(thisWeek.Days[3]), "a dated task shows on its date")
+	assert.Empty(t, slots(thisWeek.Days[0]))
+	assert.Equal(t, []slot{{"Trabalho", "09:00", "18:00"}}, slots(creationWeek.Days[0]), "from Monday of the creation week")
+	assert.ErrorIs(t, err, ErrNotAnOccurrence)
 }
 
 func TestNewAdjustment(t *testing.T) {

@@ -44,7 +44,7 @@ type weekInput struct {
 }
 
 type weekOutput struct {
-	Body weekBody
+	Body routineWeekBody
 }
 
 type adjustInput struct {

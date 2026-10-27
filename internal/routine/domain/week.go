@@ -90,21 +90,25 @@ func occurrence(t FixedTask, date calendar.Date, adjustments map[occurrenceKey]A
 	if a.Skipped {
 		return Block{}, false
 	}
-	b.Start, b.End, b.Adjusted = a.Start, a.End, true
+	b.Start, b.End = a.Start, a.End
+	b.Adjusted = a.Start != t.Start || a.End != t.End
 	return b, true
 }
 
 // place adds b, which starts on the day at offset, splitting it at midnight.
+// An occurrence ending exactly at midnight stays on its day, up to 24:00.
 func (w *Week) place(offset int, b Block) {
-	if b.End > b.Start {
+	switch {
+	case b.End > b.Start:
 		w.add(offset, b)
-		return
-	}
-	first, second := b, b
-	first.End, first.ContinuesNextDay = EndOfDay, true
-	second.Start, second.ContinuesFromPreviousDay = 0, true
-	w.add(offset, first)
-	if second.End > 0 {
+	case b.End == 0:
+		b.End = EndOfDay
+		w.add(offset, b)
+	default:
+		first, second := b, b
+		first.End, first.ContinuesNextDay = EndOfDay, true
+		second.Start, second.ContinuesFromPreviousDay = 0, true
+		w.add(offset, first)
 		w.add(offset+1, second)
 	}
 }
