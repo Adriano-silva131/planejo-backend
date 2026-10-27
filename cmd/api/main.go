@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+	// Embeds the time zone database: the API reads the user's zone by name.
+	_ "time/tzdata"
 
 	"gorm.io/gorm"
 

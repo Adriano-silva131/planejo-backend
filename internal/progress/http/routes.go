@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -50,9 +51,10 @@ type dayInput struct {
 }
 
 type checkInInput struct {
-	ID   string `path:"id" format:"uuid" doc:"Id da tarefa"`
-	Date string `path:"date" format:"date" doc:"Dia em que a tarefa foi feita" example:"2026-10-27"`
-	Body *checkInFields
+	ID       string `path:"id" format:"uuid" doc:"Id da tarefa"`
+	Date     string `path:"date" format:"date" doc:"Dia em que a tarefa foi feita" example:"2026-10-27"`
+	TimeZone string `header:"Time-Zone" required:"true" doc:"Fuso do aparelho, no formato IANA; define qual é o dia de hoje" example:"America/Sao_Paulo"`
+	Body     *checkInFields
 }
 
 type checkInOutput struct {
@@ -84,11 +86,15 @@ func (h handler) checkIn(ctx context.Context, in *checkInInput) (*checkInOutput,
 	if err != nil {
 		return nil, err
 	}
+	loc, err := parseTimeZone(in.TimeZone)
+	if err != nil {
+		return nil, err
+	}
 	e := domain.Entry{Date: d.date}
 	if in.Body != nil {
 		e.Minutes, e.Completed = in.Body.Minutes, in.Body.Completed
 	}
-	c, err := h.progress.CheckIn(ctx, d.userID, d.taskID, e)
+	c, err := h.progress.CheckIn(ctx, d.userID, d.taskID, e, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +166,19 @@ func parseDay(ctx context.Context, rawID, rawDate string) (day, error) {
 		return day{}, err
 	}
 	return day{userID: userID, taskID: taskID, date: date}, nil
+}
+
+// parseTimeZone reads an IANA zone name such as "America/Sao_Paulo". "Local"
+// is refused: it would be the server's zone, not the user's.
+func parseTimeZone(name string) (*time.Location, error) {
+	loc, err := time.LoadLocation(name)
+	if err != nil || name == "" || name == "Local" {
+		return nil, huma.Error422UnprocessableEntity("", &huma.ErrorDetail{
+			Location: "header.Time-Zone",
+			Message:  "Fuso horário inválido; use um nome como America/Sao_Paulo.",
+		})
+	}
+	return loc, nil
 }
 
 // userAndTask returns the authenticated user and the task id from the path.

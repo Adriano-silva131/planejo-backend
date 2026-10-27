@@ -232,7 +232,7 @@ func TestCORS(t *testing.T) {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/v1/items", nil)
 		req.Header.Set("Origin", origin)
 		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
-		req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+		req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Time-Zone")
 		return srv.do(t, req)
 	}
 
@@ -240,6 +240,7 @@ func TestCORS(t *testing.T) {
 	denied := preflight("https://evil.example")
 
 	assert.Equal(t, testOrigin, allowed.Header().Get("Access-Control-Allow-Origin"))
+	assert.Contains(t, allowed.Header().Get("Access-Control-Allow-Headers"), "Time-Zone")
 	assert.Empty(t, allowed.Header().Get("Access-Control-Allow-Credentials"))
 	assert.Empty(t, denied.Header().Get("Access-Control-Allow-Origin"))
 }

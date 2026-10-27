@@ -10,10 +10,6 @@ import (
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 )
 
-// latestZone is the most advanced time zone. Users have no time zone yet, so
-// "today" is its date: no later day has started anywhere.
-var latestZone = time.FixedZone("UTC+14", 14*60*60)
-
 type Progress struct {
 	tasks domain.Tasks
 	repo  domain.Repository
@@ -25,13 +21,15 @@ func NewProgress(tasks domain.Tasks, repo domain.Repository) *Progress {
 }
 
 // CheckIn marks the task as done on the entry's day, replacing what was
-// reported for that day before.
-func (p *Progress) CheckIn(ctx context.Context, userID, taskID uuid.UUID, e domain.Entry) (domain.CheckIn, error) {
+// reported for that day before. loc is the user's time zone, where "today" is.
+func (p *Progress) CheckIn(
+	ctx context.Context, userID, taskID uuid.UUID, e domain.Entry, loc *time.Location,
+) (domain.CheckIn, error) {
 	task, err := p.tasks.Get(ctx, userID, taskID)
 	if err != nil {
 		return domain.CheckIn{}, err
 	}
-	c, err := domain.NewCheckIn(userID, task, e, calendar.DateOf(p.now().In(latestZone)))
+	c, err := domain.NewCheckIn(userID, task, e, calendar.DateOf(p.now().In(loc)))
 	if err != nil {
 		return domain.CheckIn{}, err
 	}

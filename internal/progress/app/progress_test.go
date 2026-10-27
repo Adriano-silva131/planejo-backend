@@ -68,28 +68,31 @@ func TestCheckInSavesValidEntry(t *testing.T) {
 	day := calendar.NewDate(2026, time.October, 27)
 
 	_, err := newProgress(repo, time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)).
-		CheckIn(t.Context(), userID, gym.ID, domain.Entry{Date: day})
+		CheckIn(t.Context(), userID, gym.ID, domain.Entry{Date: day}, time.UTC)
 
 	require.NoError(t, err)
 	assert.Equal(t, []domain.CheckIn{{UserID: userID, TaskID: gym.ID, Date: day}}, repo.saved)
 }
 
-func TestCheckInTodayIsTheLatestDateAnywhere(t *testing.T) {
-	// 11:00 UTC on the 27th is already the 28th in UTC+14, but not the 29th.
-	now := time.Date(2026, time.October, 27, 11, 0, 0, 0, time.UTC)
+func TestCheckInTodayIsInTheUsersTimeZone(t *testing.T) {
+	// 01:00 UTC on the 28th: still the 27th in São Paulo, already the 28th in Tokyo.
+	now := time.Date(2026, time.October, 28, 1, 0, 0, 0, time.UTC)
+	saoPaulo := time.FixedZone("BRT", -3*60*60)
+	tokyo := time.FixedZone("JST", 9*60*60)
 	p := newProgress(&fakeRepo{}, now)
+	the28th := domain.Entry{Date: calendar.NewDate(2026, time.October, 28)}
 
-	_, tomorrow := p.CheckIn(t.Context(), userID, gym.ID, domain.Entry{Date: calendar.NewDate(2026, time.October, 28)})
-	_, later := p.CheckIn(t.Context(), userID, gym.ID, domain.Entry{Date: calendar.NewDate(2026, time.October, 29)})
+	_, inSaoPaulo := p.CheckIn(t.Context(), userID, gym.ID, the28th, saoPaulo)
+	_, inTokyo := p.CheckIn(t.Context(), userID, gym.ID, the28th, tokyo)
 
-	assert.NoError(t, tomorrow)
-	assert.ErrorIs(t, later, domain.ErrFutureCheckIn)
+	assert.ErrorIs(t, inSaoPaulo, domain.ErrFutureCheckIn)
+	assert.NoError(t, inTokyo)
 }
 
 func TestCheckInOfUnknownTask(t *testing.T) {
 	repo := &fakeRepo{}
 
-	_, err := newProgress(repo, time.Now()).CheckIn(t.Context(), userID, uuid.New(), domain.Entry{})
+	_, err := newProgress(repo, time.Now()).CheckIn(t.Context(), userID, uuid.New(), domain.Entry{}, time.UTC)
 
 	assert.ErrorIs(t, err, errNotFound)
 	assert.Empty(t, repo.saved)

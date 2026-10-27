@@ -109,7 +109,16 @@ func (s server) addTask(owner uuid.UUID, task domain.Task) string {
 
 func (s server) do(method, path, token, body string) *httptest.ResponseRecorder {
 	s.t.Helper()
+	return s.doIn("America/Sao_Paulo", method, path, token, body)
+}
+
+// doIn sends zone as the Time-Zone header; empty sends none.
+func (s server) doIn(zone, method, path, token, body string) *httptest.ResponseRecorder {
+	s.t.Helper()
 	req := httptest.NewRequestWithContext(s.t.Context(), method, path, strings.NewReader(body))
+	if zone != "" {
+		req.Header.Set("Time-Zone", zone)
+	}
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -201,6 +210,22 @@ func TestCheckInRules(t *testing.T) {
 
 			assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 			assert.Equal(t, tc.want, errorCode(t, rec))
+		})
+	}
+}
+
+func TestCheckInRequiresAValidTimeZone(t *testing.T) {
+	srv := newServer(t)
+	path := "/v1/tasks/" + srv.addTask(userA, gym) + "/checkins/2026-10-20"
+
+	for name, zone := range map[string]string{"missing": "", "unknown": "Mars/Olympus", "server zone": "Local"} {
+		t.Run(name, func(t *testing.T) {
+			rec := srv.doIn(zone, http.MethodPut, path, "token-a", "")
+
+			require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+			e, ok := decode(t, rec)["error"].(map[string]any)
+			require.True(t, ok)
+			assert.Contains(t, e["fields"], "Time-Zone")
 		})
 	}
 }
