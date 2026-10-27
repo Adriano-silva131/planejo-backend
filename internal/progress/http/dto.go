@@ -1,6 +1,7 @@
 package http
 
 import (
+	"strings"
 	"time"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/progress/domain"
@@ -84,6 +85,52 @@ func toWeekBody(s domain.WeekSummary) weekBody {
 			DoneMinutes:  p.DoneMinutes,
 			CompletedOn:  p.CompletedOn.String(),
 		})
+	}
+	return b
+}
+
+type habitDayBody struct {
+	Date      string `json:"date" format:"date"`
+	Scheduled bool   `json:"scheduled" doc:"É um dos dias marcados da tarefa"`
+	Done      bool   `json:"done" doc:"Foi feita neste dia"`
+}
+
+type habitWeekBody struct {
+	Start string         `json:"start" format:"date" doc:"Segunda-feira da semana"`
+	Done  int            `json:"done" doc:"Dias feitos na semana"`
+	Met   bool           `json:"met" doc:"Feita em pelo menos tantos dias quantos estão marcados"`
+	Days  []habitDayBody `json:"days" doc:"Os 7 dias, de segunda a domingo"`
+}
+
+type habitBody struct {
+	TaskID       string          `json:"taskId" format:"uuid"`
+	Title        string          `json:"title"`
+	Area         string          `json:"area"`
+	Weekdays     []string        `json:"weekdays" example:"[\"monday\",\"wednesday\",\"friday\"]"`
+	TimesPerWeek int             `json:"timesPerWeek" example:"3"`
+	Streak       int             `json:"streak" doc:"Semanas cumpridas seguidas; a semana em andamento não quebra a sequência"`
+	Weeks        []habitWeekBody `json:"weeks" doc:"Da mais antiga para a mais nova, a partir da criação da tarefa"`
+}
+
+func toHabitBody(h domain.Habit) habitBody {
+	b := habitBody{
+		TaskID:       h.Task.ID.String(),
+		Title:        h.Task.Title,
+		Area:         h.Task.Area,
+		Weekdays:     make([]string, 0, h.Task.TimesPerWeek),
+		TimesPerWeek: h.Task.TimesPerWeek,
+		Streak:       h.Streak,
+		Weeks:        make([]habitWeekBody, 0, len(h.Weeks)),
+	}
+	for _, d := range h.Task.Weekdays.Days() {
+		b.Weekdays = append(b.Weekdays, strings.ToLower(d.String()))
+	}
+	for _, w := range h.Weeks {
+		week := habitWeekBody{Start: w.Start.String(), Done: w.Done, Met: w.Met, Days: make([]habitDayBody, 0, len(w.Days))}
+		for _, d := range w.Days {
+			week.Days = append(week.Days, habitDayBody{Date: d.Date.String(), Scheduled: d.Scheduled, Done: d.Done})
+		}
+		b.Weeks = append(b.Weeks, week)
 	}
 	return b
 }

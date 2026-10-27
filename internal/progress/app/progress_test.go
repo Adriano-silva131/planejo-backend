@@ -104,6 +104,17 @@ func TestHistoryChecksTheTaskFirst(t *testing.T) {
 	assert.ErrorIs(t, err, errNotFound)
 }
 
+func TestHabitsLoadCheckInsUntilTheEndOfTheWeek(t *testing.T) {
+	repo := &fakeRepo{}
+
+	habits, err := newProgress(repo, time.Now()).Habits(t.Context(), userID, calendar.NewDate(2026, time.October, 28), 4)
+
+	require.NoError(t, err)
+	assert.Equal(t, domain.Filter{To: calendar.NewDate(2026, time.November, 1)}, repo.filter)
+	require.Len(t, habits, 1)
+	assert.Len(t, habits[0].Weeks, 4)
+}
+
 func TestWeekLoadsCheckInsUntilTheEndOfTheWeek(t *testing.T) {
 	repo := &fakeRepo{}
 	wednesday := calendar.NewDate(2026, time.October, 28)

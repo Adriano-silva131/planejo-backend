@@ -43,6 +43,11 @@ func Register(api huma.API, progress *app.Progress) {
 		OperationID: "week-progress", Method: http.MethodGet, Path: "/progress", Tags: tags,
 		Summary: "Resumo do progresso da semana",
 	}, h.week)
+	huma.Register(api, huma.Operation{
+		OperationID: "habits", Method: http.MethodGet, Path: "/progress/habits", Tags: tags,
+		Summary:     "Hábitos: as tarefas recorrentes nas últimas semanas",
+		Description: "Para cada recorrente, a grade dos dias feitos e a sequência de semanas cumpridas.",
+	}, h.habits)
 }
 
 type dayInput struct {
@@ -154,6 +159,40 @@ type day struct {
 	userID uuid.UUID
 	taskID uuid.UUID
 	date   calendar.Date
+}
+
+type habitsInput struct {
+	Week  string `query:"week" format:"date" required:"true" doc:"Um dia da semana de referência, normalmente hoje" example:"2026-10-27"`
+	Weeks int    `query:"weeks" minimum:"1" maximum:"26" default:"8" doc:"Quantas semanas mostrar na grade"`
+}
+
+type habitsOutput struct {
+	Body struct {
+		WeekStart string      `json:"weekStart" format:"date" doc:"Segunda-feira da semana de referência"`
+		Habits    []habitBody `json:"habits"`
+	}
+}
+
+func (h handler) habits(ctx context.Context, in *habitsInput) (*habitsOutput, error) {
+	userID, err := httpx.CurrentUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	day, err := calendar.ParseDate(in.Week)
+	if err != nil {
+		return nil, err
+	}
+	habits, err := h.progress.Habits(ctx, userID, day, in.Weeks)
+	if err != nil {
+		return nil, err
+	}
+	out := &habitsOutput{}
+	out.Body.WeekStart = day.StartOfWeek().String()
+	out.Body.Habits = make([]habitBody, 0, len(habits))
+	for _, habit := range habits {
+		out.Body.Habits = append(out.Body.Habits, toHabitBody(habit))
+	}
+	return out, nil
 }
 
 func parseDay(ctx context.Context, rawID, rawDate string) (day, error) {

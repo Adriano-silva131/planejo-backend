@@ -20,8 +20,10 @@ const (
 type Task struct {
 	ID    uuid.UUID
 	Title string
+	Area  string
 	Kind  TaskKind
-	// TimesPerWeek is how many weekdays a recurring task is set for.
+	// Weekdays and TimesPerWeek, their count, describe a recurring task.
+	Weekdays     calendar.Weekdays
 	TimesPerWeek int
 	// TotalMinutes and Deadline describe a one-off task.
 	TotalMinutes int

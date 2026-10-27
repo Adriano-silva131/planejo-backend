@@ -50,14 +50,35 @@ func (p *Progress) History(ctx context.Context, userID uuid.UUID, f domain.Filte
 
 // Week summarizes the week that contains day.
 func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date) (domain.WeekSummary, error) {
-	tasks, err := p.tasks.List(ctx, userID)
-	if err != nil {
-		return domain.WeekSummary{}, err
-	}
-	// One-off tasks add up every check-in until the end of the week.
-	checkIns, err := p.repo.List(ctx, userID, domain.Filter{To: day.StartOfWeek().AddDays(6)})
+	tasks, checkIns, err := p.untilEndOfWeek(ctx, userID, day)
 	if err != nil {
 		return domain.WeekSummary{}, err
 	}
 	return domain.Summarize(day, tasks, checkIns), nil
+}
+
+// Habits follows the recurring tasks over the weeks weeks up to the one that
+// contains day.
+func (p *Progress) Habits(ctx context.Context, userID uuid.UUID, day calendar.Date, weeks int) ([]domain.Habit, error) {
+	tasks, checkIns, err := p.untilEndOfWeek(ctx, userID, day)
+	if err != nil {
+		return nil, err
+	}
+	return domain.BuildHabits(day, weeks, tasks, checkIns), nil
+}
+
+// untilEndOfWeek loads the user's tasks and every check-in until the end of
+// the week that contains day: one-off totals and streaks need the history.
+func (p *Progress) untilEndOfWeek(
+	ctx context.Context, userID uuid.UUID, day calendar.Date,
+) ([]domain.Task, []domain.CheckIn, error) {
+	tasks, err := p.tasks.List(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	checkIns, err := p.repo.List(ctx, userID, domain.Filter{To: day.StartOfWeek().AddDays(6)})
+	if err != nil {
+		return nil, nil, err
+	}
+	return tasks, checkIns, nil
 }

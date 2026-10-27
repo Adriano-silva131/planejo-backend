@@ -90,3 +90,14 @@ func TestChangingTheScheduleDropsAdjustmentsThatNoLongerApply(t *testing.T) {
 		"the old skip does not come back")
 	assert.Equal(t, http.StatusNotFound, call(http.MethodDelete, occurrence, "").Code)
 }
+
+func TestEveryModuleIsWired(t *testing.T) {
+	call := api(t)
+
+	for _, path := range []string{
+		"/v1/tasks", "/v1/tasks/areas", "/v1/progress?week=2026-10-26",
+		"/v1/progress/habits?week=2026-10-26", "/v1/routine?week=2026-10-26",
+	} {
+		assert.Equal(t, http.StatusOK, call(http.MethodGet, path, "").Code, path)
+	}
+}
