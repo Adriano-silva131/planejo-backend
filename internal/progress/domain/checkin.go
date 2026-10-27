@@ -59,8 +59,10 @@ func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date) (Chec
 // Filter narrows a listing. Zero fields do not filter; dates are inclusive.
 type Filter struct {
 	TaskID uuid.UUID
-	From   calendar.Date
-	To     calendar.Date
+	// TaskIDs keeps only the check-ins of these tasks.
+	TaskIDs []uuid.UUID
+	From    calendar.Date
+	To      calendar.Date
 }
 
 // Repository stores check-ins, always scoped to one user.
@@ -72,4 +74,9 @@ type Repository interface {
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
 	// List returns the matching check-ins, oldest first.
 	List(ctx context.Context, userID uuid.UUID, f Filter) ([]CheckIn, error)
+	// SaveSchedule keeps the schedule a task had until s.Until. When the
+	// schedule changes more than once in a week, the first one is kept.
+	SaveSchedule(ctx context.Context, userID, taskID uuid.UUID, s PastSchedule) error
+	// Schedules returns the past schedules of the user's tasks, oldest first.
+	Schedules(ctx context.Context, userID uuid.UUID) (map[uuid.UUID][]PastSchedule, error)
 }

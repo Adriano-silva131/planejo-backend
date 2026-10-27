@@ -111,7 +111,7 @@ func TestScheduleChangedDropsAdjustmentsOfDatesThatNoLongerOccur(t *testing.T) {
 		{TaskID: class.ID, Date: monday.AddDays(1), Skipped: true},
 	}}
 
-	require.NoError(t, NewRoutine(fakeTasks{}, repo).ScheduleChanged(t.Context(), userID, class.ID))
+	require.NoError(t, NewRoutine(fakeTasks{}, repo).ScheduleChanged(t.Context(), userID, class.ID, &class))
 
 	require.Len(t, repo.saved, 1)
 	assert.Equal(t, monday, repo.saved[0].Date)
@@ -120,7 +120,7 @@ func TestScheduleChangedDropsAdjustmentsOfDatesThatNoLongerOccur(t *testing.T) {
 func TestScheduleChangedDropsEverythingWhenNoLongerFixed(t *testing.T) {
 	repo := &fakeRepo{saved: []domain.Adjustment{{TaskID: class.ID, Date: monday, Skipped: true}}}
 
-	require.NoError(t, NewRoutine(fakeTasks{notFixed: true}, repo).ScheduleChanged(t.Context(), userID, class.ID))
+	require.NoError(t, NewRoutine(fakeTasks{}, repo).ScheduleChanged(t.Context(), userID, class.ID, nil))
 
 	assert.Empty(t, repo.saved)
 }

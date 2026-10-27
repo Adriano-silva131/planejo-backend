@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 
 	"github.com/google/uuid"
 
@@ -54,20 +53,15 @@ func (r *Routine) Adjust(
 }
 
 // ScheduleChanged drops the adjustments that no longer apply after the task's
-// schedule changed: all of them when it is no longer fixed, and those of
-// dates that are no longer occurrences otherwise.
-func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID) error {
+// schedule changed: all of them when task is nil, as it is no longer fixed,
+// and those of dates that are no longer occurrences otherwise.
+func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, task *domain.FixedTask) error {
 	adjustments, err := r.repo.ForTask(ctx, userID, taskID)
-	if err != nil || len(adjustments) == 0 {
-		return err
-	}
-	task, err := r.tasks.Get(ctx, userID, taskID)
-	notFixed := errors.Is(err, domain.ErrNotFixedTask)
-	if err != nil && !notFixed {
+	if err != nil {
 		return err
 	}
 	for _, a := range adjustments {
-		if notFixed || !task.OccursOn(a.Date) {
+		if task == nil || !task.OccursOn(a.Date) {
 			if err := r.repo.Delete(ctx, userID, taskID, a.Date); err != nil {
 				return err
 			}

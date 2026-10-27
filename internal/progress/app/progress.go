@@ -61,3 +61,67 @@ func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date
 	}
 	return domain.Summarize(day, tasks, checkIns), nil
 }
+
+// Habits follows the recurring tasks over the weeks weeks up to the one that
+// contains day. loc is the user's time zone, which tells today and the day
+// each task was created.
+func (p *Progress) Habits(
+	ctx context.Context, userID uuid.UUID, day calendar.Date, weeks int, loc *time.Location,
+) ([]domain.Habit, error) {
+	tasks, err := p.tasks.List(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	schedules, err := p.repo.Schedules(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range tasks {
+		t := &tasks[i]
+		if !t.CreatedAt.IsZero() {
+			t.CreatedOn = calendar.DateOf(t.CreatedAt.In(loc))
+		}
+		t.PastSchedules = schedules[t.ID]
+	}
+	today := calendar.DateOf(p.now().In(loc))
+	ids, from := habitScope(tasks)
+	if len(ids) == 0 {
+		return domain.BuildHabits(today, day, weeks, tasks, nil), nil
+	}
+	checkIns, err := p.repo.List(ctx, userID, domain.Filter{TaskIDs: ids, From: from, To: day.StartOfWeek().AddDays(6)})
+	if err != nil {
+		return nil, err
+	}
+	return domain.BuildHabits(today, day, weeks, tasks, checkIns), nil
+}
+
+// habitScope returns the recurring tasks and the Monday of the oldest one's
+// creation week: no grid or streak needs other check-ins. A zero from means
+// no bound.
+func habitScope(tasks []domain.Task) (ids []uuid.UUID, from calendar.Date) {
+	for _, t := range tasks {
+		if t.Kind != domain.RecurringTask {
+			continue
+		}
+		ids = append(ids, t.ID)
+		if !t.CreatedOn.IsZero() && (from.IsZero() || t.CreatedOn.Before(from)) {
+			from = t.CreatedOn
+		}
+	}
+	if from.IsZero() {
+		return ids, from
+	}
+	return ids, from.StartOfWeek()
+}
+
+// ScheduleChanged keeps the weekdays a task had when they change, so its past
+// habit weeks are judged by them. Empty weekdays mean the task is not
+// recurring; a change that keeps the weekdays is ignored. The day of the
+// change is in the time zone stored in ctx, or UTC.
+func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before, after calendar.Weekdays) error {
+	if before == after {
+		return nil
+	}
+	changedOn := calendar.DateOf(p.now().In(calendar.LocationFrom(ctx)))
+	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Weekdays: before})
+}

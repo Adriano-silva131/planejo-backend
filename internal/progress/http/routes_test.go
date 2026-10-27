@@ -292,3 +292,52 @@ func TestWeekRequiresTheWeek(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
+
+func TestHabits(t *testing.T) {
+	srv := newServer(t)
+	days, err := calendar.NewWeekdays(time.Monday, time.Wednesday, time.Friday)
+	require.NoError(t, err)
+	gymHabit := domain.Task{Title: "Academia", Area: "Saúde", Kind: domain.RecurringTask, Weekdays: days, TimesPerWeek: 3}
+	id := srv.addTask(userA, gymHabit)
+	srv.addTask(userA, work)
+	for _, day := range []string{"2026-10-19", "2026-10-21", "2026-10-23", "2026-10-27"} {
+		require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+id+"/checkins/"+day, "token-a", "").Code)
+	}
+
+	rec := srv.do(http.MethodGet, "/v1/progress/habits?week=2026-10-28&weeks=2", "token-a", "")
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	body := decode(t, rec)
+	assert.Equal(t, "2026-10-26", body["weekStart"])
+	habits, ok := body["habits"].([]any)
+	require.True(t, ok)
+	require.Len(t, habits, 1, "only recurring tasks")
+	habit, _ := habits[0].(map[string]any)
+	assert.Equal(t, map[string]any{
+		"taskId": id, "title": "Academia", "area": "Saúde", "streak": 1.0, "timesPerWeek": 3.0,
+		"weekdays": []any{"monday", "wednesday", "friday"},
+	}, pick(habit, "taskId", "title", "area", "streak", "timesPerWeek", "weekdays"))
+	weeks, _ := habit["weeks"].([]any)
+	require.Len(t, weeks, 2)
+	assert.Equal(t, map[string]any{"start": "2026-10-19", "target": 3.0, "done": 3.0, "met": true},
+		pick(weeks[0], "start", "target", "done", "met"))
+	assert.Equal(t, map[string]any{"start": "2026-10-26", "target": 3.0, "done": 1.0, "met": false},
+		pick(weeks[1], "start", "target", "done", "met"))
+	current, _ := weeks[1].(map[string]any)
+	tuesday, _ := current["days"].([]any)[1].(map[string]any)
+	assert.Equal(t, map[string]any{"date": "2026-10-27", "scheduled": false, "done": true}, tuesday)
+}
+
+func TestHabitsValidationAndIsolation(t *testing.T) {
+	srv := newServer(t)
+	srv.addTask(userA, domain.Task{Title: "Leitura", Area: "Pessoal", Kind: domain.RecurringTask, TimesPerWeek: 1})
+
+	other := decode(t, srv.do(http.MethodGet, "/v1/progress/habits?week=2026-10-28", "token-b", ""))
+
+	assert.Empty(t, other["habits"], "the other user's habits are not visible")
+	assert.Equal(t, http.StatusUnprocessableEntity, srv.do(http.MethodGet, "/v1/progress/habits", "token-a", "").Code)
+	assert.Equal(t, http.StatusUnprocessableEntity,
+		srv.do(http.MethodGet, "/v1/progress/habits?week=2026-10-28&weeks=27", "token-a", "").Code)
+	assert.Equal(t, http.StatusUnprocessableEntity,
+		srv.doIn("", http.MethodGet, "/v1/progress/habits?week=2026-10-28", "token-a", "").Code, "Time-Zone is required")
+}

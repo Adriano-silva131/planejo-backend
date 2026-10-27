@@ -98,6 +98,9 @@ func (r *Repository) List(ctx context.Context, userID uuid.UUID, f domain.Filter
 	if f.TaskID != uuid.Nil {
 		q = q.Where("task_id = ?", f.TaskID)
 	}
+	if len(f.TaskIDs) > 0 {
+		q = q.Where("task_id IN ?", f.TaskIDs)
+	}
 	if !f.From.IsZero() {
 		q = q.Where("date >= ?", f.From.Time())
 	}

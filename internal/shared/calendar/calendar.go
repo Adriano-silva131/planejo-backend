@@ -4,6 +4,8 @@ package calendar
 
 import (
 	"fmt"
+	"math/bits"
+	"slices"
 	"time"
 )
 
@@ -29,14 +31,49 @@ func (w Weekdays) IsEmpty() bool {
 	return w == 0
 }
 
+// Days returns the days in w, Monday first, as the weeks are.
 func (w Weekdays) Days() []time.Weekday {
 	var days []time.Weekday
-	for d := time.Sunday; d <= time.Saturday; d++ {
-		if w.Has(d) {
+	for i := range 7 {
+		if d := time.Weekday((i + 1) % 7); w.Has(d) {
 			days = append(days, d)
 		}
 	}
 	return days
+}
+
+// Count is how many days are in w.
+func (w Weekdays) Count() int {
+	return bits.OnesCount8(uint8(w))
+}
+
+var weekdayNames = [...]string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"}
+
+// WeekdayName returns the name the API uses for d, such as "monday".
+func WeekdayName(d time.Weekday) string {
+	return weekdayNames[d]
+}
+
+// ParseWeekdayNames reads names such as "monday" into a set.
+func ParseWeekdayNames(names []string) (Weekdays, error) {
+	days := make([]time.Weekday, 0, len(names))
+	for _, name := range names {
+		i := slices.Index(weekdayNames[:], name)
+		if i < 0 {
+			return 0, ErrInvalidWeekday
+		}
+		days = append(days, time.Weekday(i))
+	}
+	return NewWeekdays(days...)
+}
+
+// Names returns the names of the days in w, Monday first; nil when empty.
+func (w Weekdays) Names() []string {
+	var names []string
+	for _, d := range w.Days() {
+		names = append(names, WeekdayName(d))
+	}
+	return names
 }
 
 // TimeOfDay is a wall-clock time in minutes since midnight, in the user's
@@ -69,7 +106,8 @@ func (t TimeOfDay) String() string {
 	return fmt.Sprintf("%02d:%02d", int(t)/60, int(t)%60)
 }
 
-// Date is a calendar day, without time or time zone.
+// Date is a calendar day, without time or time zone. Dates are comparable
+// with == and can be map keys.
 type Date struct {
 	t time.Time
 }

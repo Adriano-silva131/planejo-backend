@@ -88,6 +88,53 @@ func toWeekBody(s domain.WeekSummary) weekBody {
 	return b
 }
 
+type habitDayBody struct {
+	Date      string `json:"date" format:"date"`
+	Scheduled bool   `json:"scheduled" doc:"É um dos dias marcados da tarefa"`
+	Done      bool   `json:"done" doc:"Foi feita neste dia"`
+}
+
+type habitWeekBody struct {
+	Start  string         `json:"start" format:"date" doc:"Segunda-feira da semana"`
+	Target int            `json:"target" doc:"Dias pedidos na semana, pela agenda que valia nela; menos na semana de criação"`
+	Done   int            `json:"done" doc:"Dias feitos na semana, em qualquer dia"`
+	Met    bool           `json:"met" doc:"done chegou a target"`
+	Days   []habitDayBody `json:"days" doc:"Os 7 dias, de segunda a domingo"`
+}
+
+type habitBody struct {
+	TaskID       string          `json:"taskId" format:"uuid"`
+	Title        string          `json:"title"`
+	Area         string          `json:"area"`
+	Weekdays     []string        `json:"weekdays" example:"[\"monday\",\"wednesday\",\"friday\"]"`
+	TimesPerWeek int             `json:"timesPerWeek" doc:"Pela agenda atual" example:"3"`
+	Streak       int             `json:"streak" doc:"Semanas cumpridas seguidas; a semana em andamento não quebra a sequência"`
+	Weeks        []habitWeekBody `json:"weeks" doc:"Da mais antiga para a mais nova, a partir da criação da tarefa"`
+}
+
+func toHabitBody(h domain.Habit) habitBody {
+	b := habitBody{
+		TaskID:       h.Task.ID.String(),
+		Title:        h.Task.Title,
+		Area:         h.Task.Area,
+		Weekdays:     h.Task.Weekdays.Names(),
+		TimesPerWeek: h.Task.TimesPerWeek,
+		Streak:       h.Streak,
+		Weeks:        make([]habitWeekBody, 0, len(h.Weeks)),
+	}
+	for _, w := range h.Weeks {
+		week := habitWeekBody{
+			Start: w.Start.String(), Target: w.Target, Done: w.Done, Met: w.Met,
+			Days: make([]habitDayBody, 0, len(w.Days)),
+		}
+		for _, d := range w.Days {
+			week.Days = append(week.Days, habitDayBody{Date: d.Date.String(), Scheduled: d.Scheduled, Done: d.Done})
+		}
+		b.Weeks = append(b.Weeks, week)
+	}
+	return b
+}
+
 func dateStrings(dates []calendar.Date) []string {
 	out := make([]string, 0, len(dates))
 	for _, d := range dates {

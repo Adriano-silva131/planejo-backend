@@ -1,7 +1,6 @@
 package http
 
 import (
-	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -108,7 +107,7 @@ func toWeekBody(w domain.Week) routineWeekBody {
 	for _, d := range w.Days {
 		day := dayBody{
 			Date:    d.Date.String(),
-			Weekday: strings.ToLower(d.Date.Weekday().String()),
+			Weekday: calendar.WeekdayName(d.Date.Weekday()),
 			Blocks:  make([]blockBody, 0, len(d.Blocks)),
 		}
 		for _, bl := range d.Blocks {

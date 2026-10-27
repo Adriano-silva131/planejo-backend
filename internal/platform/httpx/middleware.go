@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/logger"
+	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 )
 
 const requestIDHeader = "X-Request-Id"
@@ -25,6 +26,20 @@ func requestID(next http.Handler) http.Handler {
 		w.Header().Set(requestIDHeader, id)
 		ctx := logger.With(r.Context(), slog.String("requestId", id))
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// timeZone stores the user's time zone from the Time-Zone header in the
+// request context, for code that needs "today" without its own parameter. An
+// invalid zone is ignored here: routes that need one require the header.
+func timeZone(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if name := r.Header.Get("Time-Zone"); name != "" && name != "Local" {
+			if loc, err := time.LoadLocation(name); err == nil {
+				r = r.WithContext(calendar.WithLocation(r.Context(), loc))
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

@@ -18,6 +18,23 @@ func TestWeekdays(t *testing.T) {
 	assert.False(t, w.IsEmpty())
 }
 
+func TestWeekdayNames(t *testing.T) {
+	w, err := ParseWeekdayNames([]string{"friday", "monday"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"monday", "friday"}, w.Names())
+	weekend, err := ParseWeekdayNames([]string{"sunday", "saturday"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"saturday", "sunday"}, weekend.Names(), "Monday first, Sunday last")
+	assert.Equal(t, 2, weekend.Count())
+	assert.Equal(t, NewDate(2026, time.October, 29), DateOf(time.Date(2026, time.October, 29, 23, 0, 0, 0, time.UTC)),
+		"comparable with ==")
+	assert.Equal(t, "sunday", WeekdayName(time.Sunday))
+	assert.Nil(t, Weekdays(0).Names())
+	_, err = ParseWeekdayNames([]string{"mon"})
+	assert.ErrorIs(t, err, ErrInvalidWeekday)
+}
+
 func TestWeekdaysRejectsUnknownDay(t *testing.T) {
 	_, err := NewWeekdays(time.Weekday(7))
 
@@ -99,4 +116,11 @@ func TestDateOfUsesTheTimeLocation(t *testing.T) {
 
 	assert.Equal(t, NewDate(2026, time.October, 26), DateOf(instant.In(saoPaulo)))
 	assert.Equal(t, NewDate(2026, time.October, 27), DateOf(instant))
+}
+
+func TestLocationInContext(t *testing.T) {
+	saoPaulo := time.FixedZone("BRT", -3*60*60)
+
+	assert.Equal(t, time.UTC, LocationFrom(t.Context()))
+	assert.Equal(t, saoPaulo, LocationFrom(WithLocation(t.Context(), saoPaulo)))
 }
