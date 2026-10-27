@@ -44,6 +44,16 @@ func (r *fakeRepo) List(_ context.Context, _ uuid.UUID, offset, limit int) ([]do
 	return nil, 0, nil
 }
 
+func (r *fakeRepo) All(_ context.Context, userID uuid.UUID) ([]domain.Task, error) {
+	var out []domain.Task
+	for _, t := range r.tasks {
+		if t.UserID == userID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
 func (r *fakeRepo) Update(_ context.Context, t domain.Task) (domain.Task, error) {
 	r.updateCalled = true
 	r.tasks[t.ID] = t

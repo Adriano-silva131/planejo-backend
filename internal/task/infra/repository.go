@@ -56,15 +56,32 @@ func (r *Repository) List(ctx context.Context, userID uuid.UUID, offset, limit i
 		return nil, 0, fmt.Errorf("task: list: %w", err)
 	}
 
+	tasks, err := toDomainList(models)
+	if err != nil {
+		return nil, 0, err
+	}
+	return tasks, int(total), nil
+}
+
+func (r *Repository) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, error) {
+	var models []taskModel
+	err := db.Conn(ctx, r.db).Where("user_id = ?", userID).Order("created_at DESC, id DESC").Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("task: all: %w", err)
+	}
+	return toDomainList(models)
+}
+
+func toDomainList(models []taskModel) ([]domain.Task, error) {
 	tasks := make([]domain.Task, 0, len(models))
 	for _, m := range models {
 		t, err := toDomain(m)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		tasks = append(tasks, t)
 	}
-	return tasks, int(total), nil
+	return tasks, nil
 }
 
 func (r *Repository) Update(ctx context.Context, t domain.Task) (domain.Task, error) {

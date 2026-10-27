@@ -18,6 +18,9 @@ import (
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/logger"
+	progressapp "github.com/Adriano-silva131/planejo-backend/internal/progress/app"
+	progresshttp "github.com/Adriano-silva131/planejo-backend/internal/progress/http"
+	progressinfra "github.com/Adriano-silva131/planejo-backend/internal/progress/infra"
 	taskapp "github.com/Adriano-silva131/planejo-backend/internal/task/app"
 	taskhttp "github.com/Adriano-silva131/planejo-backend/internal/task/http"
 	taskinfra "github.com/Adriano-silva131/planejo-backend/internal/task/infra"
@@ -112,7 +115,11 @@ func serve(ctx context.Context, srv *http.Server, log *slog.Logger) error {
 }
 
 func registerRoutes(router httpx.Router, gdb *gorm.DB) {
-	taskhttp.Register(router.Authenticated, taskapp.NewTasks(taskinfra.NewRepository(gdb)))
+	tasks := taskapp.NewTasks(taskinfra.NewRepository(gdb))
+	taskhttp.Register(router.Authenticated, tasks)
+
+	progress := progressapp.NewProgress(progressTasks{tasks: tasks}, progressinfra.NewRepository(gdb))
+	progresshttp.Register(router.Authenticated, progress)
 }
 
 func newServer(port int, handler http.Handler) *http.Server {

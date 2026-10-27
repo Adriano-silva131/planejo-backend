@@ -13,6 +13,8 @@ type Repository interface {
 	Get(ctx context.Context, userID, id uuid.UUID) (Task, error)
 	// List returns a page of the user's tasks, newest first, and the total.
 	List(ctx context.Context, userID uuid.UUID, offset, limit int) ([]Task, int, error)
+	// All returns every task of the user, newest first.
+	All(ctx context.Context, userID uuid.UUID) ([]Task, error)
 	Update(ctx context.Context, t Task) (Task, error)
 	Delete(ctx context.Context, userID, id uuid.UUID) error
 }

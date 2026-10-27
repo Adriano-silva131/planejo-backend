@@ -34,6 +34,11 @@ func (s *Tasks) List(ctx context.Context, userID uuid.UUID, page, perPage int) (
 	return s.repo.List(ctx, userID, (page-1)*perPage, perPage)
 }
 
+// All returns every task of the user, for modules that need the whole set.
+func (s *Tasks) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, error) {
+	return s.repo.All(ctx, userID)
+}
+
 func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Details) (domain.Task, error) {
 	task, err := s.repo.Get(ctx, userID, id)
 	if err != nil {

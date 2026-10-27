@@ -171,3 +171,16 @@ func TestDatabaseRejectsInconsistentRows(t *testing.T) {
 
 	assert.ErrorContains(t, err, "tasks_fixed_shape")
 }
+
+func TestAllReturnsEveryTaskOfTheUser(t *testing.T) {
+	repo := newRepo(t)
+	d := details(t)
+	first := create(t, repo, userA, d["recurring"])
+	second := create(t, repo, userA, d["one-off"])
+	create(t, repo, userB, d["recurring"])
+
+	tasks, err := repo.All(t.Context(), userA)
+
+	require.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{second.ID, first.ID}, ids(tasks))
+}
