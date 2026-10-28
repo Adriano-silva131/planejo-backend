@@ -13,6 +13,8 @@ import (
 type AreaUsage struct {
 	Area  string
 	Tasks int
+	// Color is empty while the user has not chosen one.
+	Color string
 }
 
 // Repository stores tasks. Every method is scoped to one user: a task that
@@ -29,6 +31,8 @@ type Repository interface {
 	Fixed(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]Task, error)
 	// Areas returns the areas the user has used, most used first.
 	Areas(ctx context.Context, userID uuid.UUID) ([]AreaUsage, error)
+	// SetAreaColor saves the color of an area, whether or not a task uses it.
+	SetAreaColor(ctx context.Context, userID uuid.UUID, c AreaColor) error
 	Update(ctx context.Context, t Task) (Task, error)
 	Delete(ctx context.Context, userID, id uuid.UUID) error
 }

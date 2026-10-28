@@ -70,6 +70,18 @@ func (s *Tasks) Areas(ctx context.Context, userID uuid.UUID) ([]domain.AreaUsage
 	return s.repo.Areas(ctx, userID)
 }
 
+// SetAreaColor saves the color the user chose for an area.
+func (s *Tasks) SetAreaColor(ctx context.Context, userID uuid.UUID, area, color string) (domain.AreaColor, error) {
+	c, err := domain.NewAreaColor(area, color)
+	if err != nil {
+		return domain.AreaColor{}, err
+	}
+	if err := s.repo.SetAreaColor(ctx, userID, c); err != nil {
+		return domain.AreaColor{}, err
+	}
+	return c, nil
+}
+
 // Update replaces the task's details. When its schedule changes, the
 // listeners are told in the same transaction.
 func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Details) (domain.Task, error) {

@@ -21,6 +21,7 @@ type fakeRepo struct {
 	offset       int
 	limit        int
 	updateCalled bool
+	areaColors   []domain.AreaColor
 }
 
 func newFakeRepo() *fakeRepo {
@@ -61,6 +62,11 @@ func (r *fakeRepo) Fixed(context.Context, uuid.UUID, calendar.Date, calendar.Dat
 
 func (r *fakeRepo) Areas(context.Context, uuid.UUID) ([]domain.AreaUsage, error) {
 	return nil, nil
+}
+
+func (r *fakeRepo) SetAreaColor(_ context.Context, _ uuid.UUID, c domain.AreaColor) error {
+	r.areaColors = append(r.areaColors, c)
+	return nil
 }
 
 func (r *fakeRepo) Update(_ context.Context, t domain.Task) (domain.Task, error) {
@@ -184,4 +190,23 @@ func TestUpdateFailsWhenAListenerFails(t *testing.T) {
 	_, err = tasks.Update(t.Context(), userID, task.ID, moved)
 
 	assert.ErrorIs(t, err, errBoom)
+}
+
+func TestSetAreaColorSavesNormalizedColor(t *testing.T) {
+	repo := newFakeRepo()
+
+	c, err := NewTasks(repo, noTx{}).SetAreaColor(t.Context(), userID, " Saúde ", "#E08A5C")
+
+	require.NoError(t, err)
+	assert.Equal(t, domain.AreaColor{Area: "Saúde", Color: "#e08a5c"}, c)
+	assert.Equal(t, []domain.AreaColor{c}, repo.areaColors)
+}
+
+func TestSetAreaColorRejectsInvalidColor(t *testing.T) {
+	repo := newFakeRepo()
+
+	_, err := NewTasks(repo, noTx{}).SetAreaColor(t.Context(), userID, "Saúde", "vermelho")
+
+	assert.ErrorIs(t, err, domain.ErrInvalidColor)
+	assert.Empty(t, repo.areaColors)
 }

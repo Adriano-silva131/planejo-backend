@@ -9,6 +9,7 @@ var (
 	ErrTitleTooLong  = invalid("task_title_too_long", "O título pode ter no máximo 120 caracteres.")
 	ErrAreaRequired  = invalid("task_area_required", "Informe o tipo da tarefa, ex.: Saúde, Trabalho.")
 	ErrAreaTooLong   = invalid("task_area_too_long", "A área pode ter no máximo 50 caracteres.")
+	ErrInvalidColor  = invalid("area_invalid_color", "Escolha uma cor no formato #rrggbb.")
 
 	ErrScheduleRequired  = invalid("task_kind_required", "Informe o tipo da tarefa: fixa, recorrente ou pontual.")
 	ErrPriorityRequired  = invalid("task_priority_required", "Informe a prioridade da tarefa.")

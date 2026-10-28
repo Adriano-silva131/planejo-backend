@@ -245,3 +245,27 @@ func TestListAreas(t *testing.T) {
 		map[string]any{"area": "Trabalho", "tasks": 2.0},
 	}, decode(t, rec)["data"])
 }
+
+func TestSetAreaColor(t *testing.T) {
+	srv := newServer(t)
+	srv.create(tokenA, gymJSON)
+	srv.create(tokenA, workJSON)
+
+	rec := srv.do(http.MethodPut, "/v1/tasks/areas/color", tokenA, `{"area":"Saúde","color":"#E08A5C"}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, map[string]any{"area": "Saúde", "color": "#e08a5c"}, decode(t, rec))
+
+	rec = srv.do(http.MethodGet, "/v1/tasks/areas", tokenA, "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, []any{
+		map[string]any{"area": "Saúde", "tasks": 1.0, "color": "#e08a5c"},
+		map[string]any{"area": "Trabalho", "tasks": 1.0},
+	}, decode(t, rec)["data"])
+}
+
+func TestSetAreaColorValidatesColor(t *testing.T) {
+	rec := newServer(t).do(http.MethodPut, "/v1/tasks/areas/color", tokenA, `{"area":"Saúde","color":"red"}`)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Contains(t, errorOf(t, rec)["fields"], "color")
+}

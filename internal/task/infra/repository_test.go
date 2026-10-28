@@ -201,6 +201,25 @@ func TestAreasCountsTheUsersAreasMostUsedFirst(t *testing.T) {
 	assert.Equal(t, []domain.AreaUsage{{Area: "Saúde", Tasks: 2}, {Area: "Trabalho", Tasks: 2}}, areas)
 }
 
+func TestAreasCarryTheColorTheUserChose(t *testing.T) {
+	repo := newRepo(t)
+	d := details(t)
+	create(t, repo, userA, d["recurring"])
+	create(t, repo, userA, d["fixed weekly"])
+	create(t, repo, userB, d["recurring"])
+	require.NoError(t, repo.SetAreaColor(t.Context(), userA, domain.AreaColor{Area: "Saúde", Color: "#111111"}))
+	require.NoError(t, repo.SetAreaColor(t.Context(), userA, domain.AreaColor{Area: "Saúde", Color: "#e08a5c"}))
+	require.NoError(t, repo.SetAreaColor(t.Context(), userB, domain.AreaColor{Area: "Saúde", Color: "#222222"}))
+
+	areas, err := repo.Areas(t.Context(), userA)
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []domain.AreaUsage{
+		{Area: "Saúde", Tasks: 1, Color: "#e08a5c"},
+		{Area: "Trabalho", Tasks: 1},
+	}, areas)
+}
+
 func TestDatabaseAcceptsFixedTaskEndingTheNextDay(t *testing.T) {
 	repo := newRepo(t)
 	sleep := details(t)["fixed weekly"]
