@@ -24,12 +24,12 @@ func Register(api huma.API, routine *app.Routine) {
 	huma.Register(api, huma.Operation{
 		OperationID: "week-routine", Method: http.MethodGet, Path: "/routine", Tags: tags,
 		Summary:     "Rotina da semana",
-		Description: "Os blocos de cada dia, montados a partir das tarefas fixas e dos ajustes desta semana.",
+		Description: "Os blocos de cada dia: as tarefas fixas, com os ajustes desta semana, e as sessões que o usuário encaixou para recorrentes e pontuais.",
 	}, h.week)
 	huma.Register(api, huma.Operation{
 		OperationID: "adjust-occurrence", Method: http.MethodPut, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,
-		Summary:     "Ajusta uma ocorrência de uma tarefa fixa só nesta semana",
-		Description: "Tira a ocorrência ou muda o horário dela, sem alterar a tarefa. Ajustar de novo substitui o ajuste anterior.",
+		Summary:     "Ajusta uma ocorrência de uma tarefa fixa só neste dia",
+		Description: "Tira a ocorrência ou muda o horário dela, sem alterar a tarefa. Ajustar de novo substitui o ajuste anterior. Recorrentes e pontuais não têm ocorrências: use as sessões.",
 		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity},
 	}, h.adjust)
 	huma.Register(api, huma.Operation{
@@ -37,6 +37,7 @@ func Register(api huma.API, routine *app.Routine) {
 		Summary: "Volta a ocorrência ao padrão da tarefa", DefaultStatus: http.StatusNoContent,
 		Errors: []int{http.StatusNotFound},
 	}, h.reset)
+	registerSessions(api, h)
 }
 
 type weekInput struct {

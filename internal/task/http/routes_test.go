@@ -98,18 +98,20 @@ func errorOf(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 
 const (
 	gymJSON = `{"title":"Academia","area":"Saúde","kind":"recurring","priority":"high",
-		"weekdays":["monday","wednesday","friday"],"durationMinutes":60,"period":"morning"}`
+		"timesPerWeek":3,"weekdays":["monday","wednesday","friday"],"durationMinutes":60,"period":"morning"}`
 	workJSON = `{"title":"Trabalho","area":"Trabalho","kind":"fixed",
 		"weekdays":["monday","tuesday","wednesday","thursday","friday"],"start":"09:00","end":"18:00"}`
 	appointmentJSON = `{"title":"Consulta médica","area":"Saúde","kind":"fixed",
 		"date":"2026-11-05","start":"15:00","end":"16:00"}`
+	runJSON = `{"title":"Corrida","area":"Saúde","kind":"recurring","priority":"medium",
+		"timesPerWeek":2,"durationMinutes":30}`
 	reportJSON = `{"title":"Entregar relatório","area":"Trabalho","kind":"one_off","priority":"medium",
 		"deadline":"2026-10-30","period":"afternoon"}`
 )
 
 func TestCreateEachKind(t *testing.T) {
 	for name, body := range map[string]string{
-		"recurring": gymJSON, "fixed weekly": workJSON, "fixed on date": appointmentJSON, "one-off": reportJSON,
+		"recurring": gymJSON, "recurring without usual days": runJSON, "fixed weekly": workJSON, "fixed on date": appointmentJSON, "one-off": reportJSON,
 	} {
 		t.Run(name, func(t *testing.T) {
 			created := newServer(t).create(tokenA, body)
@@ -132,6 +134,7 @@ func TestCreateReportsFieldsByKind(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Equal(t, map[string]any{
 		"priority":        []any{"Obrigatório para este tipo de tarefa."},
+		"timesPerWeek":    []any{"Obrigatório para este tipo de tarefa."},
 		"durationMinutes": []any{"Obrigatório para este tipo de tarefa."},
 		"deadline":        []any{"Não se aplica a este tipo de tarefa."},
 	}, errorOf(t, rec)["fields"])
@@ -146,6 +149,25 @@ func TestCreateRejectsDurationOnOneOffTasks(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"durationMinutes": []any{"Não se aplica a este tipo de tarefa."},
 	}, errorOf(t, rec)["fields"])
+}
+
+func TestCreateRejectsTimesPerWeekOutsideRecurringTasks(t *testing.T) {
+	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
+		`{"title":"Trabalho","area":"Trabalho","kind":"fixed","weekdays":["monday"],"start":"09:00","end":"18:00",
+		"timesPerWeek":5}`)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, map[string]any{
+		"timesPerWeek": []any{"Não se aplica a este tipo de tarefa."},
+	}, errorOf(t, rec)["fields"])
+}
+
+func TestCreateRejectsMoreThanOnceADay(t *testing.T) {
+	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
+		`{"title":"Leitura","area":"Pessoal","kind":"recurring","priority":"low","timesPerWeek":8,"durationMinutes":30}`)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Contains(t, errorOf(t, rec)["fields"], "timesPerWeek")
 }
 
 func TestCreateReportsDomainRules(t *testing.T) {
@@ -236,7 +258,7 @@ func TestTasksRequireToken(t *testing.T) {
 
 func TestCreateRequiresArea(t *testing.T) {
 	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
-		`{"title":"Leitura","kind":"recurring","priority":"low","weekdays":["sunday"],"durationMinutes":30}`)
+		`{"title":"Leitura","kind":"recurring","priority":"low","timesPerWeek":1,"durationMinutes":30}`)
 
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Contains(t, errorOf(t, rec)["fields"], "area")

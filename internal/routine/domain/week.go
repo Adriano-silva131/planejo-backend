@@ -13,7 +13,7 @@ import (
 const EndOfDay calendar.TimeOfDay = 24 * 60
 
 // Week is the routine of one week, Monday to Sunday, built from the fixed
-// tasks and the adjustments of that week.
+// tasks, their adjustments and the sessions the user placed that week.
 type Week struct {
 	Start calendar.Date
 	End   calendar.Date
@@ -25,12 +25,24 @@ type Day struct {
 	Blocks []Block
 }
 
-// Block is the part of an occurrence that falls on one day. An occurrence
-// that crosses midnight is split in two blocks, one on each day.
+// Kind is the kind of task a block comes from.
+type Kind string
+
+const (
+	FixedKind     Kind = "fixed"
+	RecurringKind Kind = "recurring"
+	OneOffKind    Kind = "one_off"
+)
+
+// Block is the part of an occurrence of a fixed task that falls on one day,
+// or a session the user placed. An occurrence that crosses midnight is split
+// in two blocks, one on each day. Adjusted is only set on fixed tasks moved
+// that week.
 type Block struct {
 	TaskID   uuid.UUID
 	Title    string
 	Area     string
+	Kind     Kind
 	Start    calendar.TimeOfDay
 	End      calendar.TimeOfDay
 	Adjusted bool
@@ -46,8 +58,11 @@ type occurrenceKey struct {
 
 // BuildWeek builds the week that contains day. It starts on the Sunday
 // before, whose overnight occurrences end on Monday. Adjustments of dates
-// that are no longer occurrences are ignored.
-func BuildWeek(day calendar.Date, tasks []FixedTask, adjustments []Adjustment) Week {
+// that are no longer occurrences are ignored, and so are sessions of tasks
+// not in plannable.
+func BuildWeek(
+	day calendar.Date, fixed []FixedTask, adjustments []Adjustment, plannable []PlannableTask, sessions []Session,
+) Week {
 	start := day.StartOfWeek()
 	w := Week{Start: start, End: start.AddDays(6), Days: make([]Day, 7)}
 	for i := range w.Days {
@@ -61,12 +76,13 @@ func BuildWeek(day calendar.Date, tasks []FixedTask, adjustments []Adjustment) W
 
 	for offset := -1; offset < len(w.Days); offset++ {
 		date := start.AddDays(offset)
-		for _, t := range tasks {
+		for _, t := range fixed {
 			if b, ok := occurrence(t, date, byOccurrence); ok {
 				w.place(offset, b)
 			}
 		}
 	}
+	w.placeSessions(plannable, sessions)
 
 	for i := range w.Days {
 		slices.SortStableFunc(w.Days[i].Blocks, func(a, b Block) int {
@@ -82,7 +98,7 @@ func occurrence(t FixedTask, date calendar.Date, adjustments map[occurrenceKey]A
 	if !t.OccursOn(date) {
 		return Block{}, false
 	}
-	b := Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Start: t.Start, End: t.End}
+	b := Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: FixedKind, Start: t.Start, End: t.End}
 	a, ok := adjustments[occurrenceKey{t.ID, date.String()}]
 	if !ok {
 		return b, true
@@ -118,4 +134,30 @@ func (w *Week) add(offset int, b Block) {
 	if offset >= 0 && offset < len(w.Days) {
 		w.Days[offset].Blocks = append(w.Days[offset].Blocks, b)
 	}
+}
+
+// placeSessions adds the sessions of this week as blocks of their tasks.
+func (w *Week) placeSessions(plannable []PlannableTask, sessions []Session) {
+	byID := make(map[uuid.UUID]PlannableTask, len(plannable))
+	for _, t := range plannable {
+		byID[t.ID] = t
+	}
+	for _, s := range sessions {
+		t, ok := byID[s.TaskID]
+		offset := w.offsetOf(s.Date)
+		if !ok || offset < 0 {
+			continue
+		}
+		w.add(offset, Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: t.Kind, Start: s.Start, End: s.End})
+	}
+}
+
+// offsetOf returns the index of date in the week, or -1 outside it.
+func (w *Week) offsetOf(date calendar.Date) int {
+	for i, d := range w.Days {
+		if d.Date.Equal(date) {
+			return i
+		}
+	}
+	return -1
 }

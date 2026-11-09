@@ -23,7 +23,7 @@ func TestToFixedTask(t *testing.T) {
 	}, CreatedAt: time.Date(2026, time.October, 27, 1, 30, 0, 0, time.UTC)}
 	gym := taskdomain.Task{ID: uuid.New(), Details: taskdomain.Details{
 		Title: "Academia", Area: "Saúde", Priority: taskdomain.High,
-		Schedule: taskdomain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
+		Schedule: taskdomain.RecurringSchedule{TimesPerWeek: 1, Weekdays: days, Duration: time.Hour},
 	}}
 
 	fixed, ok := toFixedTask(sleep)
@@ -35,4 +35,32 @@ func TestToFixedTask(t *testing.T) {
 		CreatedOn: calendar.NewDate(2026, time.October, 27),
 	}, fixed)
 	assert.False(t, recurring, "only fixed tasks are part of the routine")
+}
+
+func TestToPlannableTask(t *testing.T) {
+	id := uuid.New()
+	run := taskdomain.Task{ID: id, Details: taskdomain.Details{
+		Title: "Corrida", Area: "Saúde", Priority: taskdomain.Medium,
+		Schedule: taskdomain.RecurringSchedule{TimesPerWeek: 2, Duration: 30 * time.Minute},
+	}}
+	report := taskdomain.Task{ID: id, Details: taskdomain.Details{
+		Title: "Relatório", Area: "Trabalho", Priority: taskdomain.Low,
+		Schedule: taskdomain.OneOffSchedule{Deadline: calendar.NewDate(2026, time.November, 5)},
+	}}
+	work := taskdomain.Task{ID: id, Details: taskdomain.Details{
+		Title: "Trabalho", Area: "Trabalho",
+		Schedule: taskdomain.FixedSchedule{Weekdays: calendar.Weekdays(1 << time.Monday), Start: 9 * 60, End: 18 * 60},
+	}}
+
+	recurring, ok := toPlannableTask(run)
+	require.True(t, ok)
+	oneOff, ok := toPlannableTask(report)
+	require.True(t, ok)
+	_, fixed := toPlannableTask(work)
+
+	assert.Equal(t, routinedomain.PlannableTask{
+		ID: id, Title: "Corrida", Area: "Saúde", Kind: routinedomain.RecurringKind, Duration: 30 * time.Minute,
+	}, recurring)
+	assert.Equal(t, routinedomain.PlannableTask{ID: id, Title: "Relatório", Area: "Trabalho", Kind: routinedomain.OneOffKind}, oneOff)
+	assert.False(t, fixed, "a fixed task has occurrences, not sessions")
 }

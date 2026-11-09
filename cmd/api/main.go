@@ -126,7 +126,9 @@ func registerRoutes(router httpx.Router, gdb *gorm.DB) {
 	progress := progressapp.NewProgress(progressTasks{tasks: tasks}, progressinfra.NewRepository(gdb))
 	progresshttp.Register(router.Authenticated, progress)
 
-	routine := routineapp.NewRoutine(routineTasks{tasks: tasks}, routineinfra.NewRepository(gdb))
+	routine := routineapp.NewRoutine(
+		routineTasks{tasks: tasks}, routineinfra.NewRepository(gdb), routineinfra.NewSessionRepository(gdb),
+	)
 	routinehttp.Register(router.Authenticated, routine)
 	tasks.OnScheduleChange(routineListener{routine: routine})
 	tasks.OnScheduleChange(progressListener{progress: progress})

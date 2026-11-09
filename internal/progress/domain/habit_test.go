@@ -128,7 +128,7 @@ func TestHabitWeeksFollowTheScheduleOfTheirTime(t *testing.T) {
 	before := gym.Weekdays
 	gym.Weekdays, gym.TimesPerWeek = mondayToFriday, 5
 	// Three days a week until this week, when it became Monday to Friday.
-	gym.PastSchedules = []PastSchedule{{ChangedOn: monday, Weekdays: before}}
+	gym.PastSchedules = []PastSchedule{{ChangedOn: monday, Recurrence: Recurrence{TimesPerWeek: 3, Weekdays: before}}}
 
 	h := BuildHabits(day(2), day(2), 2, []Task{gym}, checks(gym, -14, -12, -10, -7, -5, -3))[0]
 
@@ -159,7 +159,7 @@ func TestHabitWeekOfAChangeNeverPenalizes(t *testing.T) {
 	require.NoError(t, err)
 	gym.Weekdays, gym.TimesPerWeek = six, 6
 	// Changed on Thursday of last week, after Monday and Wednesday were done.
-	gym.PastSchedules = []PastSchedule{{ChangedOn: day(-4), Weekdays: twoDays}}
+	gym.PastSchedules = []PastSchedule{{ChangedOn: day(-4), Recurrence: Recurrence{TimesPerWeek: 2, Weekdays: twoDays}}}
 
 	h := BuildHabits(day(2), day(2), 2, []Task{gym}, checks(gym, -7, -5))[0]
 
@@ -179,6 +179,20 @@ func TestHabitBecomingRecurringMidWeekAsksOnlyForTheDaysLeft(t *testing.T) {
 	require.Len(t, h.Weeks, 2)
 	assert.Equal(t, 2, h.Weeks[0].Target)
 	assert.True(t, h.Weeks[0].Met)
+	assert.Equal(t, 1, h.Streak)
+}
+
+func TestHabitWithoutUsualDaysCountsAnyDays(t *testing.T) {
+	gym := gymHabit(t)
+	gym.Weekdays, gym.TimesPerWeek = 0, 2
+	gym.CreatedOn = day(-7)
+
+	h := BuildHabits(day(2), day(2), 2, []Task{gym}, checks(gym, -2, -1))[0]
+
+	require.Len(t, h.Weeks, 2)
+	assert.Equal(t, 2, h.Weeks[0].Target)
+	assert.True(t, h.Weeks[0].Met, "Saturday and Sunday count as much as any day")
+	assert.False(t, h.Weeks[0].Days[5].Scheduled)
 	assert.Equal(t, 1, h.Streak)
 }
 

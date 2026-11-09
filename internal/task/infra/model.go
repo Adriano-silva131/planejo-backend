@@ -25,6 +25,7 @@ type taskModel struct {
 	DurationMinutes *int64
 	Period          *string
 	Deadline        *time.Time
+	TimesPerWeek    *int
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -36,7 +37,7 @@ func (taskModel) TableName() string {
 // editableColumns are written on update, including the ones set to NULL.
 var editableColumns = []string{
 	"title", "area", "kind", "priority", "weekdays", "date", "start_minute",
-	"end_minute", "duration_minutes", "period", "deadline", "updated_at",
+	"end_minute", "duration_minutes", "period", "deadline", "times_per_week", "updated_at",
 }
 
 func toModel(t domain.Task) taskModel {
@@ -57,6 +58,7 @@ func toModel(t domain.Task) taskModel {
 		m.StartMinute = new(int(s.Start))
 		m.EndMinute = new(int(s.End))
 	case domain.RecurringSchedule:
+		m.TimesPerWeek = new(s.TimesPerWeek)
 		m.Weekdays = s.Weekdays
 		m.DurationMinutes = new(int64(s.Duration / time.Minute))
 		m.Period = optional(string(s.Period))
@@ -97,9 +99,10 @@ func (m taskModel) schedule() (domain.Schedule, error) {
 		}, nil
 	case domain.Recurring:
 		return domain.RecurringSchedule{
-			Weekdays: m.Weekdays,
-			Duration: minutes(m.DurationMinutes),
-			Period:   domain.Period(value(m.Period)),
+			TimesPerWeek: value(m.TimesPerWeek),
+			Weekdays:     m.Weekdays,
+			Duration:     minutes(m.DurationMinutes),
+			Period:       domain.Period(value(m.Period)),
 		}, nil
 	case domain.OneOff:
 		return domain.OneOffSchedule{

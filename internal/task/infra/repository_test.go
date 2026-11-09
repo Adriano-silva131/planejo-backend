@@ -44,10 +44,13 @@ func details(t *testing.T) map[string]domain.Details {
 			Date: calendar.NewDate(2026, time.November, 5), Start: 15 * 60, End: 16 * 60,
 		}},
 		"recurring": {Title: "Academia", Area: "Saúde", Priority: domain.High, Schedule: domain.RecurringSchedule{
-			Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
+			TimesPerWeek: 2, Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
+		}},
+		"recurring without usual days": {Title: "Corrida", Area: "Saúde", Priority: domain.Medium, Schedule: domain.RecurringSchedule{
+			TimesPerWeek: 3, Duration: 30 * time.Minute,
 		}},
 		"recurring without period": {Title: "Leitura", Area: "Pessoal", Priority: domain.Low, Schedule: domain.RecurringSchedule{
-			Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
+			TimesPerWeek: 1, Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
 		}},
 		"one-off": {Title: "Relatório", Area: "Trabalho", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
 			Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
@@ -170,6 +173,26 @@ func TestDatabaseRejectsInconsistentRows(t *testing.T) {
 	err := tx.Create(&m).Error
 
 	assert.ErrorContains(t, err, "tasks_fixed_shape")
+}
+
+func TestDatabaseRejectsTimesPerWeekOutsideRecurringTasks(t *testing.T) {
+	tx := dbtest.Tx(t)
+	m := toModel(domain.Task{ID: uuid.New(), UserID: userA, Details: details(t)["one-off"]})
+	m.TimesPerWeek = new(2)
+
+	err := tx.Create(&m).Error
+
+	assert.ErrorContains(t, err, "tasks_times_per_week_recurring")
+}
+
+func TestDatabaseRequiresTimesPerWeekOnRecurringTasks(t *testing.T) {
+	tx := dbtest.Tx(t)
+	m := toModel(domain.Task{ID: uuid.New(), UserID: userA, Details: details(t)["recurring"]})
+	m.TimesPerWeek = nil
+
+	err := tx.Create(&m).Error
+
+	assert.ErrorContains(t, err, "tasks_recurring_shape")
 }
 
 func TestAllReturnsEveryTaskOfTheUser(t *testing.T) {

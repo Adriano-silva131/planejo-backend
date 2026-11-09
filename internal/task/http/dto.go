@@ -15,14 +15,15 @@ import (
 type taskFields struct {
 	Title string `json:"title" minLength:"1" maxLength:"120" doc:"Título da tarefa" example:"Academia"`
 	Area  string `json:"area" minLength:"1" maxLength:"50" doc:"Tipo da tarefa, escolhido pelo usuário, ex.: Saúde, Trabalho, Estudos; GET /tasks/areas lista os já usados" example:"Saúde"`
-	Kind  string `json:"kind" enum:"fixed,recurring,one_off" doc:"fixed: hora marcada, o planejador só contorna; recurring: repete nos dias escolhidos; one_off: uma vez, até o prazo" example:"recurring"`
+	Kind  string `json:"kind" enum:"fixed,recurring,one_off" doc:"fixed: hora marcada, o planejador só contorna; recurring: algumas vezes por semana, em qualquer dia; one_off: uma vez, até o prazo" example:"recurring"`
 
 	Priority string   `json:"priority,omitempty" enum:"high,medium,low" doc:"recurring e one_off" example:"high"`
-	Weekdays []string `json:"weekdays,omitempty" enum:"sunday,monday,tuesday,wednesday,thursday,friday,saturday" uniqueItems:"true" doc:"recurring, ou fixed semanal"`
+	Weekdays []string `json:"weekdays,omitempty" enum:"sunday,monday,tuesday,wednesday,thursday,friday,saturday" uniqueItems:"true" doc:"fixed semanal: dias em que acontece; recurring: dias em que o usuário costuma fazer, opcional, só preferência"`
 	Date     string   `json:"date,omitempty" format:"date" doc:"fixed num dia específico, no lugar de weekdays"`
 	Start    string   `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: início, no fuso do usuário" example:"09:00"`
 	End      string   `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: fim, no fuso do usuário; antes do início, termina no dia seguinte" example:"18:00"`
 
+	TimesPerWeek    int    `json:"timesPerWeek,omitempty" minimum:"1" maximum:"7" doc:"recurring: quantas vezes por semana, em qualquer dia" example:"3"`
 	DurationMinutes int    `json:"durationMinutes,omitempty" minimum:"5" maximum:"6000" doc:"recurring: duração de cada sessão" example:"60"`
 	Deadline        string `json:"deadline,omitempty" format:"date" doc:"one_off: último dia para concluir"`
 	Period          string `json:"period,omitempty" enum:"morning,afternoon,evening" doc:"recurring e one_off: período preferido, opcional" example:"morning"`
@@ -42,11 +43,13 @@ type kindFields struct {
 
 var fieldsByKind = map[domain.Kind]kindFields{
 	domain.Fixed:     {required: []string{"start", "end"}, optional: []string{"weekdays", "date"}},
-	domain.Recurring: {required: []string{"priority", "weekdays", "durationMinutes"}, optional: []string{"period"}},
+	domain.Recurring: {required: []string{"priority", "timesPerWeek", "durationMinutes"}, optional: []string{"weekdays", "period"}},
 	domain.OneOff:    {required: []string{"priority", "deadline"}, optional: []string{"period"}},
 }
 
-var scheduleFields = []string{"priority", "weekdays", "date", "start", "end", "durationMinutes", "deadline", "period"}
+var scheduleFields = []string{
+	"priority", "weekdays", "date", "start", "end", "timesPerWeek", "durationMinutes", "deadline", "period",
+}
 
 func (f taskFields) present() map[string]bool {
 	return map[string]bool{
@@ -55,6 +58,7 @@ func (f taskFields) present() map[string]bool {
 		"date":            f.Date != "",
 		"start":           f.Start != "",
 		"end":             f.End != "",
+		"timesPerWeek":    f.TimesPerWeek != 0,
 		"durationMinutes": f.DurationMinutes != 0,
 		"deadline":        f.Deadline != "",
 		"period":          f.Period != "",
@@ -96,16 +100,11 @@ func (f taskFields) details() (domain.Details, error) {
 }
 
 func (f taskFields) schedule() (domain.Schedule, error) {
-	duration := time.Duration(f.DurationMinutes) * time.Minute
 	switch domain.Kind(f.Kind) {
 	case domain.Fixed:
 		return f.fixedSchedule()
 	case domain.Recurring:
-		days, err := calendar.ParseWeekdayNames(f.Weekdays)
-		if err != nil {
-			return nil, err
-		}
-		return domain.RecurringSchedule{Weekdays: days, Duration: duration, Period: domain.Period(f.Period)}, nil
+		return f.recurringSchedule()
 	case domain.OneOff:
 		deadline, err := calendar.ParseOptionalDate(f.Deadline)
 		if err != nil {
@@ -114,6 +113,19 @@ func (f taskFields) schedule() (domain.Schedule, error) {
 		return domain.OneOffSchedule{Deadline: deadline, Period: domain.Period(f.Period)}, nil
 	}
 	return nil, domain.ErrScheduleRequired
+}
+
+func (f taskFields) recurringSchedule() (domain.Schedule, error) {
+	days, err := calendar.ParseWeekdayNames(f.Weekdays)
+	if err != nil {
+		return nil, err
+	}
+	return domain.RecurringSchedule{
+		TimesPerWeek: f.TimesPerWeek,
+		Weekdays:     days,
+		Duration:     time.Duration(f.DurationMinutes) * time.Minute,
+		Period:       domain.Period(f.Period),
+	}, nil
 }
 
 func (f taskFields) fixedSchedule() (domain.Schedule, error) {
@@ -149,6 +161,7 @@ func toBody(t domain.Task) taskBody {
 		f.Date = s.Date.String()
 		f.Start, f.End = s.Start.String(), s.End.String()
 	case domain.RecurringSchedule:
+		f.TimesPerWeek = s.TimesPerWeek
 		f.Weekdays = s.Weekdays.Names()
 		f.DurationMinutes = int(s.Duration / time.Minute)
 		f.Period = string(s.Period)

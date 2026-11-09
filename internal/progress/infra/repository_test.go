@@ -41,8 +41,8 @@ func (f fixture) task(userID uuid.UUID) uuid.UUID {
 	f.t.Helper()
 	id := uuid.New()
 	require.NoError(f.t, f.tx.Exec(
-		`INSERT INTO tasks (id, user_id, title, area, kind, priority, weekdays, duration_minutes)
-		 VALUES (?, ?, 'Academia', 'Saúde', 'recurring', 'high', 2, 60)`, id, userID).Error)
+		`INSERT INTO tasks (id, user_id, title, area, kind, priority, weekdays, times_per_week, duration_minutes)
+		 VALUES (?, ?, 'Academia', 'Saúde', 'recurring', 'high', 2, 1, 60)`, id, userID).Error)
 	return id
 }
 
@@ -177,9 +177,9 @@ func TestSchedules(t *testing.T) {
 	monWed, err := calendar.NewWeekdays(time.Monday, time.Wednesday)
 	require.NoError(t, err)
 
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(9), Weekdays: monWed}))
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(1), Weekdays: mon}))
-	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(3), Weekdays: monWed}),
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(9), Recurrence: domain.Recurrence{TimesPerWeek: 2, Weekdays: monWed}}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(1), Recurrence: domain.Recurrence{TimesPerWeek: 1, Weekdays: mon}}))
+	require.NoError(t, f.repo.SaveSchedule(t.Context(), userA, task, domain.PastSchedule{ChangedOn: monday.AddDays(3), Recurrence: domain.Recurrence{TimesPerWeek: 2, Weekdays: monWed}}),
 		"a second change in the same week keeps the first")
 	require.NoError(t, f.repo.SaveSchedule(t.Context(), userB, other, domain.PastSchedule{ChangedOn: monday}))
 
@@ -187,8 +187,8 @@ func TestSchedules(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, map[uuid.UUID][]domain.PastSchedule{task: {
-		{ChangedOn: monday.AddDays(1), Weekdays: mon},
-		{ChangedOn: monday.AddDays(9), Weekdays: monWed},
+		{ChangedOn: monday.AddDays(1), Recurrence: domain.Recurrence{TimesPerWeek: 1, Weekdays: mon}},
+		{ChangedOn: monday.AddDays(9), Recurrence: domain.Recurrence{TimesPerWeek: 2, Weekdays: monWed}},
 	}}, got)
 	// Last: the foreign key violation aborts the test's transaction.
 	assert.ErrorIs(t, f.repo.SaveSchedule(t.Context(), userB, task, domain.PastSchedule{ChangedOn: monday.AddDays(14)}),

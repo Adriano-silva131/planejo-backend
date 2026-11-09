@@ -31,9 +31,9 @@ func TestToProgressTask(t *testing.T) {
 			progressdomain.Task{ID: id, Title: "T", Kind: progressdomain.FixedTask, CreatedAt: createdAt, CreatedOn: createdOn},
 		},
 		"recurring": {
-			taskdomain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
+			taskdomain.RecurringSchedule{TimesPerWeek: 2, Weekdays: days, Duration: time.Hour},
 			progressdomain.Task{
-				ID: id, Title: "T", Kind: progressdomain.RecurringTask, Weekdays: days, TimesPerWeek: 3,
+				ID: id, Title: "T", Kind: progressdomain.RecurringTask, Weekdays: days, TimesPerWeek: 2,
 				CreatedAt: createdAt, CreatedOn: createdOn,
 			},
 		},

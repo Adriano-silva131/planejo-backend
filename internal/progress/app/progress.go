@@ -120,14 +120,13 @@ func habitScope(tasks []domain.Task) (ids []uuid.UUID, from calendar.Date) {
 	return ids, from.StartOfWeek()
 }
 
-// ScheduleChanged keeps the weekdays a task had when they change, so its past
-// habit weeks are judged by them. Empty weekdays mean the task is not
-// recurring; a change that keeps the weekdays is ignored. The day of the
-// change is in the time zone stored in ctx, or UTC.
-func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before, after calendar.Weekdays) error {
+// ScheduleChanged keeps how a task repeated when that changes, so its past
+// habit weeks are judged by it. A change that keeps the recurrence is
+// ignored. The day of the change is in the time zone stored in ctx, or UTC.
+func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before, after domain.Recurrence) error {
 	if before == after {
 		return nil
 	}
 	changedOn := calendar.DateOf(p.now().In(calendar.LocationFrom(ctx)))
-	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Weekdays: before})
+	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Recurrence: before})
 }

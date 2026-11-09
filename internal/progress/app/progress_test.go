@@ -145,26 +145,32 @@ func TestHabitsUseTheUsersTimeZone(t *testing.T) {
 	}, repo.filter, "only the habits' check-ins, from the oldest habit's week")
 }
 
-func TestScheduleChangedKeepsTheOldWeekdays(t *testing.T) {
-	mon := calendar.Weekdays(1 << time.Monday)
-	monWed := mon | 1<<time.Wednesday
+func TestScheduleChangedKeepsTheOldRecurrence(t *testing.T) {
+	once := domain.Recurrence{TimesPerWeek: 1, Weekdays: calendar.Weekdays(1 << time.Monday)}
+	twice := domain.Recurrence{TimesPerWeek: 2, Weekdays: once.Weekdays | 1<<time.Wednesday}
+	otherDay := domain.Recurrence{TimesPerWeek: 1, Weekdays: calendar.Weekdays(1 << time.Friday)}
 	// Monday 2026-11-02 at 01:00 UTC: still Sunday the 1st in São Paulo.
 	now := time.Date(2026, time.November, 2, 1, 0, 0, 0, time.UTC)
 	inSaoPaulo := calendar.WithLocation(t.Context(), time.FixedZone("BRT", -3*60*60))
 	cases := map[string]struct {
 		ctx           context.Context
-		before, after calendar.Weekdays
+		before, after domain.Recurrence
 		want          []domain.PastSchedule
 	}{
-		"new weekdays, user's zone": {inSaoPaulo, mon, monWed, []domain.PastSchedule{
-			{ChangedOn: calendar.NewDate(2026, time.November, 1), Weekdays: mon},
+		"more times, user's zone": {inSaoPaulo, once, twice, []domain.PastSchedule{
+			{ChangedOn: calendar.NewDate(2026, time.November, 1), Recurrence: once},
 		}},
-		"no zone, UTC": {t.Context(), mon, monWed, []domain.PastSchedule{
-			{ChangedOn: calendar.NewDate(2026, time.November, 2), Weekdays: mon},
+		"no zone, UTC": {t.Context(), once, twice, []domain.PastSchedule{
+			{ChangedOn: calendar.NewDate(2026, time.November, 2), Recurrence: once},
 		}},
-		"became recurring": {t.Context(), 0, mon, []domain.PastSchedule{{ChangedOn: calendar.NewDate(2026, time.November, 2)}}},
-		"same weekdays":    {t.Context(), mon, mon, nil},
-		"never recurring":  {t.Context(), 0, 0, nil},
+		"other usual day": {t.Context(), once, otherDay, []domain.PastSchedule{
+			{ChangedOn: calendar.NewDate(2026, time.November, 2), Recurrence: once},
+		}},
+		"became recurring": {t.Context(), domain.Recurrence{}, once, []domain.PastSchedule{
+			{ChangedOn: calendar.NewDate(2026, time.November, 2)},
+		}},
+		"same recurrence": {t.Context(), once, once, nil},
+		"never recurring": {t.Context(), domain.Recurrence{}, domain.Recurrence{}, nil},
 	}
 
 	for name, tc := range cases {

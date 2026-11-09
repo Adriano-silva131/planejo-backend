@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -32,11 +33,25 @@ func (t FixedTask) OccursOn(d calendar.Date) bool {
 	return t.Weekdays.Has(d.Weekday()) && !d.Before(t.CreatedOn.StartOfWeek())
 }
 
-// Tasks reads the user's fixed tasks. Fixed returns those that may occur
-// from from to to. Get fails with a not-found error when the task does not
-// exist or belongs to someone else, and with ErrNotFixedTask when it is not
-// fixed.
+// PlannableTask is what the routine needs to know about a recurring or
+// one-off task: the user places its sessions in the week. Duration is how long
+// a recurring session lasts; a one-off task has none.
+type PlannableTask struct {
+	ID       uuid.UUID
+	Title    string
+	Area     string
+	Kind     Kind
+	Duration time.Duration
+}
+
+// Tasks reads the user's tasks. Fixed returns the fixed tasks that may occur
+// from from to to, and Plannable every recurring and one-off task. GetFixed
+// and GetPlannable fail with a not-found error when the task does not exist
+// or belongs to someone else, and with ErrNoOccurrences or
+// ErrFixedTaskSession when it is of the other kind.
 type Tasks interface {
 	Fixed(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]FixedTask, error)
-	Get(ctx context.Context, userID, id uuid.UUID) (FixedTask, error)
+	Plannable(ctx context.Context, userID uuid.UUID) ([]PlannableTask, error)
+	GetFixed(ctx context.Context, userID, id uuid.UUID) (FixedTask, error)
+	GetPlannable(ctx context.Context, userID, id uuid.UUID) (PlannableTask, error)
 }

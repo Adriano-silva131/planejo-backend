@@ -11,7 +11,8 @@ type Kind string
 const (
 	// Fixed happens at a set time and the planner only works around it.
 	Fixed Kind = "fixed"
-	// Recurring repeats on chosen weekdays; the planner picks the time.
+	// Recurring is done a number of times a week, on any days; the user
+	// places each session in the week.
 	Recurring Kind = "recurring"
 	// OneOff is done once, by a deadline. It has no estimate: how long it takes
 	// is hard to know beforehand.
@@ -63,18 +64,24 @@ func (s FixedSchedule) validate() error {
 	return nil
 }
 
-// RecurringSchedule takes Duration on each of the Weekdays.
+// MaxTimesPerWeek is one session a day: a task is checked in once a day.
+const MaxTimesPerWeek = 7
+
+// RecurringSchedule is done TimesPerWeek times a week, on any days, taking
+// Duration each time. Weekdays are the days the user usually does it, a
+// preference that may be empty.
 type RecurringSchedule struct {
-	Weekdays calendar.Weekdays
-	Duration time.Duration
-	Period   Period
+	TimesPerWeek int
+	Weekdays     calendar.Weekdays
+	Duration     time.Duration
+	Period       Period
 }
 
 func (RecurringSchedule) Kind() Kind { return Recurring }
 
 func (s RecurringSchedule) validate() error {
-	if s.Weekdays.IsEmpty() {
-		return ErrWeekdaysRequired
+	if s.TimesPerWeek < 1 || s.TimesPerWeek > MaxTimesPerWeek {
+		return ErrInvalidTimesPerWeek
 	}
 	if s.Duration < MinDuration || s.Duration > MaxSessionDuration {
 		return ErrInvalidSessionDuration

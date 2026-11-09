@@ -11,8 +11,8 @@ import (
 	taskdomain "github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
-// routineTasks lets the routine module read fixed tasks without importing the
-// task module.
+// routineTasks lets the routine module read tasks without importing the task
+// module.
 type routineTasks struct {
 	tasks *taskapp.Tasks
 }
@@ -35,16 +35,40 @@ func (r routineTasks) Fixed(
 	return fixed, nil
 }
 
-func (r routineTasks) Get(ctx context.Context, userID, id uuid.UUID) (routinedomain.FixedTask, error) {
+func (r routineTasks) Plannable(ctx context.Context, userID uuid.UUID) ([]routinedomain.PlannableTask, error) {
+	tasks, err := r.tasks.All(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var plannable []routinedomain.PlannableTask
+	for _, t := range tasks {
+		if p, ok := toPlannableTask(t); ok {
+			plannable = append(plannable, p)
+		}
+	}
+	return plannable, nil
+}
+
+func (r routineTasks) GetFixed(ctx context.Context, userID, id uuid.UUID) (routinedomain.FixedTask, error) {
 	t, err := r.tasks.Get(ctx, userID, id)
 	if err != nil {
 		return routinedomain.FixedTask{}, err
 	}
-	f, ok := toFixedTask(t)
-	if !ok {
-		return routinedomain.FixedTask{}, routinedomain.ErrNotFixedTask
+	if f, ok := toFixedTask(t); ok {
+		return f, nil
 	}
-	return f, nil
+	return routinedomain.FixedTask{}, routinedomain.ErrNoOccurrences
+}
+
+func (r routineTasks) GetPlannable(ctx context.Context, userID, id uuid.UUID) (routinedomain.PlannableTask, error) {
+	t, err := r.tasks.Get(ctx, userID, id)
+	if err != nil {
+		return routinedomain.PlannableTask{}, err
+	}
+	if p, ok := toPlannableTask(t); ok {
+		return p, nil
+	}
+	return routinedomain.PlannableTask{}, routinedomain.ErrFixedTaskSession
 }
 
 func toFixedTask(t taskdomain.Task) (routinedomain.FixedTask, bool) {
@@ -63,4 +87,18 @@ func toFixedTask(t taskdomain.Task) (routinedomain.FixedTask, bool) {
 
 		CreatedOn: calendar.DateOf(t.CreatedAt.UTC()),
 	}, true
+}
+
+// toPlannableTask maps a recurring or one-off task.
+func toPlannableTask(t taskdomain.Task) (routinedomain.PlannableTask, bool) {
+	p := routinedomain.PlannableTask{ID: t.ID, Title: t.Title, Area: t.Area}
+	switch s := t.Schedule.(type) {
+	case taskdomain.RecurringSchedule:
+		p.Kind, p.Duration = routinedomain.RecurringKind, s.Duration
+	case taskdomain.OneOffSchedule:
+		p.Kind = routinedomain.OneOffKind
+	default:
+		return routinedomain.PlannableTask{}, false
+	}
+	return p, true
 }

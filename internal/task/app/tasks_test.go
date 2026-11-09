@@ -107,7 +107,7 @@ func gym(t *testing.T) domain.Details {
 		Title:    "Academia",
 		Area:     "Saúde",
 		Priority: domain.High,
-		Schedule: domain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
+		Schedule: domain.RecurringSchedule{TimesPerWeek: 2, Weekdays: days, Duration: time.Hour},
 	}
 }
 
@@ -172,7 +172,7 @@ func TestUpdateTellsListenersWhenTheScheduleChanges(t *testing.T) {
 	assert.Empty(t, l.calls, "the schedule did not change")
 
 	moved := gym(t)
-	moved.Schedule = domain.RecurringSchedule{Weekdays: calendar.Weekdays(1 << time.Friday), Duration: time.Hour}
+	moved.Schedule = domain.RecurringSchedule{TimesPerWeek: 1, Weekdays: calendar.Weekdays(1 << time.Friday), Duration: time.Hour}
 	_, err = tasks.Update(t.Context(), userID, task.ID, moved)
 	require.NoError(t, err)
 	assert.Equal(t, []uuid.UUID{task.ID}, l.calls)
@@ -185,7 +185,7 @@ func TestUpdateFailsWhenAListenerFails(t *testing.T) {
 	task, err := tasks.Create(t.Context(), userID, gym(t))
 	require.NoError(t, err)
 	moved := gym(t)
-	moved.Schedule = domain.RecurringSchedule{Weekdays: calendar.Weekdays(1 << time.Friday), Duration: time.Hour}
+	moved.Schedule = domain.RecurringSchedule{TimesPerWeek: 1, Weekdays: calendar.Weekdays(1 << time.Friday), Duration: time.Hour}
 
 	_, err = tasks.Update(t.Context(), userID, task.ID, moved)
 
