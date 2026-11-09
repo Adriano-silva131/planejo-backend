@@ -61,7 +61,6 @@ func toModel(t domain.Task) taskModel {
 		m.DurationMinutes = new(int64(s.Duration / time.Minute))
 		m.Period = optional(string(s.Period))
 	case domain.OneOffSchedule:
-		m.DurationMinutes = new(int64(s.Duration / time.Minute))
 		m.Deadline = optionalDate(s.Deadline)
 		m.Period = optional(string(s.Period))
 	}
@@ -104,7 +103,6 @@ func (m taskModel) schedule() (domain.Schedule, error) {
 		}, nil
 	case domain.OneOff:
 		return domain.OneOffSchedule{
-			Duration: minutes(m.DurationMinutes),
 			Deadline: dateOf(m.Deadline),
 			Period:   domain.Period(value(m.Period)),
 		}, nil

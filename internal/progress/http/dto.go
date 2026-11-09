@@ -8,17 +8,12 @@ import (
 )
 
 type checkInFields struct {
-	Minutes   int    `json:"minutes,omitempty" minimum:"0" maximum:"1440" doc:"Só em tarefa pontual: minutos dedicados no dia" example:"90"`
-	Completed bool   `json:"completed,omitempty" doc:"Só em tarefa pontual: concluída neste dia"`
-	Start     string `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"Hora em que a tarefa começou de fato, no fuso do usuário; opcional" example:"07:15"`
+	Start string `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"Hora em que a tarefa começou de fato, no fuso do usuário; opcional" example:"07:15"`
 }
 
-// checkInBody always carries minutes and completed, even when zero.
 type checkInBody struct {
 	TaskID    string    `json:"taskId" format:"uuid"`
-	Date      string    `json:"date" format:"date"`
-	Minutes   int       `json:"minutes" doc:"Minutos dedicados no dia; 0 em tarefa recorrente"`
-	Completed bool      `json:"completed" doc:"Concluída neste dia; só em tarefa pontual"`
+	Date      string    `json:"date" format:"date" doc:"Dia em que foi feita; na pontual, o dia da conclusão"`
 	Start     string    `json:"start,omitempty" doc:"Hora em que começou de fato; ausente quando não informada" example:"07:15"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -28,8 +23,6 @@ func toCheckInBody(c domain.CheckIn) checkInBody {
 	return checkInBody{
 		TaskID:    c.TaskID.String(),
 		Date:      c.Date.String(),
-		Minutes:   c.Minutes,
-		Completed: c.Completed,
 		Start:     c.Start.String(),
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
@@ -45,13 +38,10 @@ type recurringBody struct {
 }
 
 type oneOffBody struct {
-	TaskID       string `json:"taskId" format:"uuid"`
-	Title        string `json:"title"`
-	TotalMinutes int    `json:"totalMinutes" doc:"Duração total planejada"`
-	Deadline     string `json:"deadline" format:"date"`
-	WeekMinutes  int    `json:"weekMinutes" doc:"Minutos registrados na semana"`
-	DoneMinutes  int    `json:"doneMinutes" doc:"Minutos registrados até o fim da semana"`
-	CompletedOn  string `json:"completedOn,omitempty" format:"date" doc:"Dia da conclusão; ausente enquanto aberta"`
+	TaskID      string `json:"taskId" format:"uuid"`
+	Title       string `json:"title"`
+	Deadline    string `json:"deadline" format:"date"`
+	CompletedOn string `json:"completedOn,omitempty" format:"date" doc:"Dia da conclusão; ausente enquanto aberta"`
 }
 
 type weekBody struct {
@@ -79,13 +69,10 @@ func toWeekBody(s domain.WeekSummary) weekBody {
 	}
 	for _, p := range s.OneOff {
 		b.OneOff = append(b.OneOff, oneOffBody{
-			TaskID:       p.Task.ID.String(),
-			Title:        p.Task.Title,
-			TotalMinutes: p.Task.TotalMinutes,
-			Deadline:     p.Task.Deadline.String(),
-			WeekMinutes:  p.WeekMinutes,
-			DoneMinutes:  p.DoneMinutes,
-			CompletedOn:  p.CompletedOn.String(),
+			TaskID:      p.Task.ID.String(),
+			Title:       p.Task.Title,
+			Deadline:    p.Task.Deadline.String(),
+			CompletedOn: p.CompletedOn.String(),
 		})
 	}
 	return b

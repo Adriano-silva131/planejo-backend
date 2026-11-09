@@ -13,7 +13,8 @@ const (
 	Fixed Kind = "fixed"
 	// Recurring repeats on chosen weekdays; the planner picks the time.
 	Recurring Kind = "recurring"
-	// OneOff happens once before a deadline; the planner may split it.
+	// OneOff is done once, by a deadline. It has no estimate: how long it takes
+	// is hard to know beforehand.
 	OneOff Kind = "one_off"
 )
 
@@ -29,7 +30,6 @@ const (
 const (
 	MinDuration        = 5 * time.Minute
 	MaxSessionDuration = 12 * time.Hour
-	MaxTotalDuration   = 100 * time.Hour
 )
 
 // Schedule says when a task happens. It is one of FixedSchedule,
@@ -82,9 +82,8 @@ func (s RecurringSchedule) validate() error {
 	return validatePeriod(s.Period)
 }
 
-// OneOffSchedule takes Duration in total, done by the end of Deadline.
+// OneOffSchedule is done by the end of Deadline.
 type OneOffSchedule struct {
-	Duration time.Duration
 	Deadline calendar.Date
 	Period   Period
 }
@@ -94,9 +93,6 @@ func (OneOffSchedule) Kind() Kind { return OneOff }
 func (s OneOffSchedule) validate() error {
 	if s.Deadline.IsZero() {
 		return ErrDeadlineRequired
-	}
-	if s.Duration < MinDuration || s.Duration > MaxTotalDuration {
-		return ErrInvalidTotalDuration
 	}
 	return validatePeriod(s.Period)
 }

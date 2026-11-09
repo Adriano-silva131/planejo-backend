@@ -46,9 +46,9 @@ func (f fixture) task(userID uuid.UUID) uuid.UUID {
 	return id
 }
 
-func (f fixture) save(userID, taskID uuid.UUID, date calendar.Date, minutes int) domain.CheckIn {
+func (f fixture) save(userID, taskID uuid.UUID, date calendar.Date) domain.CheckIn {
 	f.t.Helper()
-	c, err := f.repo.Save(f.t.Context(), domain.CheckIn{UserID: userID, TaskID: taskID, Date: date, Minutes: minutes})
+	c, err := f.repo.Save(f.t.Context(), domain.CheckIn{UserID: userID, TaskID: taskID, Date: date})
 	require.NoError(f.t, err)
 	return c
 }
@@ -64,12 +64,11 @@ func TestSaveAndList(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)
 
-	saved := f.save(userA, task, monday, 30)
+	saved := f.save(userA, task, monday)
 	got := f.list(userA, domain.Filter{})
 
 	require.Len(t, got, 1)
 	assert.Equal(t, monday, got[0].Date)
-	assert.Equal(t, 30, got[0].Minutes)
 	assert.Equal(t, calendar.OptionalTime{}, got[0].Start, "no start when the user did not say")
 	assert.False(t, saved.CreatedAt.IsZero())
 }
@@ -77,17 +76,15 @@ func TestSaveAndList(t *testing.T) {
 func TestSaveReplacesTheSameDay(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)
-	first := f.save(userA, task, monday, 30)
+	first := f.save(userA, task, monday)
 
 	second, err := f.repo.Save(t.Context(), domain.CheckIn{
-		UserID: userA, TaskID: task, Date: monday, Minutes: 90, Completed: true, Start: calendar.SomeTime(7*60 + 15),
+		UserID: userA, TaskID: task, Date: monday, Start: calendar.SomeTime(7*60 + 15),
 	})
 
 	require.NoError(t, err)
 	got := f.list(userA, domain.Filter{})
 	require.Len(t, got, 1)
-	assert.Equal(t, 90, got[0].Minutes)
-	assert.True(t, got[0].Completed)
 	assert.Equal(t, calendar.SomeTime(7*60+15), got[0].Start)
 	assert.True(t, second.CreatedAt.Equal(first.CreatedAt), "created_at is kept")
 }
@@ -114,22 +111,22 @@ func TestSaveOnDeletedTask(t *testing.T) {
 func TestSaveNeverOverwritesAnotherUsersCheckIn(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)
-	f.save(userA, task, monday, 30)
+	f.save(userA, task, monday)
 
-	_, err := f.repo.Save(t.Context(), domain.CheckIn{UserID: userB, TaskID: task, Date: monday, Minutes: 999})
+	_, err := f.repo.Save(t.Context(), domain.CheckIn{UserID: userB, TaskID: task, Date: monday, Start: calendar.SomeTime(9 * 60)})
 
 	require.ErrorIs(t, err, domain.ErrTaskNotFound)
-	assert.Equal(t, 30, f.list(userA, domain.Filter{})[0].Minutes)
+	assert.Equal(t, calendar.OptionalTime{}, f.list(userA, domain.Filter{})[0].Start)
 }
 
 func TestListFilters(t *testing.T) {
 	f := newFixture(t)
 	gym, reading := f.task(userA), f.task(userA)
-	f.save(userA, gym, monday.AddDays(2), 0)
-	f.save(userA, gym, monday, 0)
-	f.save(userA, reading, monday.AddDays(1), 0)
-	f.save(userA, gym, monday.AddDays(9), 0)
-	f.save(userB, f.task(userB), monday, 0)
+	f.save(userA, gym, monday.AddDays(2))
+	f.save(userA, gym, monday)
+	f.save(userA, reading, monday.AddDays(1))
+	f.save(userA, gym, monday.AddDays(9))
+	f.save(userB, f.task(userB), monday)
 
 	dates := func(checkIns []domain.CheckIn) []calendar.Date {
 		out := make([]calendar.Date, 0, len(checkIns))
@@ -152,7 +149,7 @@ func TestListFilters(t *testing.T) {
 func TestDelete(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)
-	f.save(userA, task, monday, 0)
+	f.save(userA, task, monday)
 
 	require.ErrorIs(t, f.repo.Delete(t.Context(), userB, task, monday), domain.ErrCheckInNotFound)
 	require.Len(t, f.list(userA, domain.Filter{}), 1, "a check-in of another user must survive")
@@ -165,7 +162,7 @@ func TestDelete(t *testing.T) {
 func TestDeletingTheTaskRemovesItsCheckIns(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)
-	f.save(userA, task, monday, 0)
+	f.save(userA, task, monday)
 
 	require.NoError(t, f.tx.Exec("DELETE FROM tasks WHERE id = ?", task).Error)
 

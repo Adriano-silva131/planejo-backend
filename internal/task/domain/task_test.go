@@ -59,7 +59,7 @@ func report() Details {
 		Title:    "Entregar relatório",
 		Area:     "Trabalho",
 		Priority: Medium,
-		Schedule: OneOffSchedule{Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)},
+		Schedule: OneOffSchedule{Deadline: calendar.NewDate(2026, time.October, 30)},
 	}
 }
 
@@ -117,10 +117,7 @@ func TestNewRejectsInvalidDetails(t *testing.T) {
 		"short session":       {setRecurringDuration(t, time.Minute), ErrInvalidSessionDuration},
 		"long session":        {setRecurringDuration(t, 13*time.Hour), ErrInvalidSessionDuration},
 		"unknown period":      {setRecurringPeriod(t, "dawn"), ErrInvalidPeriod},
-		"one-off no deadline": {func(d *Details) { d.Schedule = OneOffSchedule{Duration: time.Hour} }, ErrDeadlineRequired},
-		"one-off too long": {func(d *Details) {
-			d.Schedule = OneOffSchedule{Duration: 101 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)}
-		}, ErrInvalidTotalDuration},
+		"one-off no deadline": {func(d *Details) { d.Schedule = OneOffSchedule{} }, ErrDeadlineRequired},
 	}
 
 	for name, tc := range cases {

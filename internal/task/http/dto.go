@@ -23,7 +23,7 @@ type taskFields struct {
 	Start    string   `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: início, no fuso do usuário" example:"09:00"`
 	End      string   `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: fim, no fuso do usuário; antes do início, termina no dia seguinte" example:"18:00"`
 
-	DurationMinutes int    `json:"durationMinutes,omitempty" minimum:"5" maximum:"6000" doc:"recurring: por sessão; one_off: total" example:"60"`
+	DurationMinutes int    `json:"durationMinutes,omitempty" minimum:"5" maximum:"6000" doc:"recurring: duração de cada sessão" example:"60"`
 	Deadline        string `json:"deadline,omitempty" format:"date" doc:"one_off: último dia para concluir"`
 	Period          string `json:"period,omitempty" enum:"morning,afternoon,evening" doc:"recurring e one_off: período preferido, opcional" example:"morning"`
 }
@@ -43,7 +43,7 @@ type kindFields struct {
 var fieldsByKind = map[domain.Kind]kindFields{
 	domain.Fixed:     {required: []string{"start", "end"}, optional: []string{"weekdays", "date"}},
 	domain.Recurring: {required: []string{"priority", "weekdays", "durationMinutes"}, optional: []string{"period"}},
-	domain.OneOff:    {required: []string{"priority", "durationMinutes", "deadline"}, optional: []string{"period"}},
+	domain.OneOff:    {required: []string{"priority", "deadline"}, optional: []string{"period"}},
 }
 
 var scheduleFields = []string{"priority", "weekdays", "date", "start", "end", "durationMinutes", "deadline", "period"}
@@ -111,7 +111,7 @@ func (f taskFields) schedule() (domain.Schedule, error) {
 		if err != nil {
 			return nil, err
 		}
-		return domain.OneOffSchedule{Duration: duration, Deadline: deadline, Period: domain.Period(f.Period)}, nil
+		return domain.OneOffSchedule{Deadline: deadline, Period: domain.Period(f.Period)}, nil
 	}
 	return nil, domain.ErrScheduleRequired
 }
@@ -153,7 +153,6 @@ func toBody(t domain.Task) taskBody {
 		f.DurationMinutes = int(s.Duration / time.Minute)
 		f.Period = string(s.Period)
 	case domain.OneOffSchedule:
-		f.DurationMinutes = int(s.Duration / time.Minute)
 		f.Deadline = s.Deadline.String()
 		f.Period = string(s.Period)
 	}

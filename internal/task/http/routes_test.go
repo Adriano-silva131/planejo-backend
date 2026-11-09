@@ -104,7 +104,7 @@ const (
 	appointmentJSON = `{"title":"Consulta médica","area":"Saúde","kind":"fixed",
 		"date":"2026-11-05","start":"15:00","end":"16:00"}`
 	reportJSON = `{"title":"Entregar relatório","area":"Trabalho","kind":"one_off","priority":"medium",
-		"durationMinutes":180,"deadline":"2026-10-30","period":"afternoon"}`
+		"deadline":"2026-10-30","period":"afternoon"}`
 )
 
 func TestCreateEachKind(t *testing.T) {
@@ -137,6 +137,17 @@ func TestCreateReportsFieldsByKind(t *testing.T) {
 	}, errorOf(t, rec)["fields"])
 }
 
+func TestCreateRejectsDurationOnOneOffTasks(t *testing.T) {
+	rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA,
+		`{"title":"Revisão do carro","area":"Casa","kind":"one_off","priority":"low","deadline":"2026-11-17",
+		"durationMinutes":60}`)
+
+	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, map[string]any{
+		"durationMinutes": []any{"Não se aplica a este tipo de tarefa."},
+	}, errorOf(t, rec)["fields"])
+}
+
 func TestCreateReportsDomainRules(t *testing.T) {
 	for want, body := range map[string]string{
 		"fixed_task_days": `{"title":"Trabalho","area":"Trabalho","kind":"fixed","weekdays":["monday"],
@@ -144,7 +155,7 @@ func TestCreateReportsDomainRules(t *testing.T) {
 		"task_invalid_time_range": `{"title":"Trabalho","area":"Trabalho","kind":"fixed","weekdays":["monday"],
 			"start":"09:00","end":"09:00"}`,
 		"task_title_required": `{"title":"   ","area":"Trabalho","kind":"one_off","priority":"low",
-			"durationMinutes":30,"deadline":"2026-10-30"}`,
+			"deadline":"2026-10-30"}`,
 	} {
 		t.Run(want, func(t *testing.T) {
 			rec := newServer(t).do(http.MethodPost, "/v1/tasks", tokenA, body)

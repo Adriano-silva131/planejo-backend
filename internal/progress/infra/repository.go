@@ -15,11 +15,9 @@ import (
 )
 
 type checkInModel struct {
-	TaskID    uuid.UUID `gorm:"primaryKey"`
-	Date      time.Time `gorm:"primaryKey"`
-	UserID    uuid.UUID
-	Minutes   int
-	Completed bool
+	TaskID uuid.UUID `gorm:"primaryKey"`
+	Date   time.Time `gorm:"primaryKey"`
+	UserID uuid.UUID
 	// StartMinute is NULL when the user did not say when the task started.
 	StartMinute *int
 	CreatedAt   time.Time
@@ -35,8 +33,6 @@ func toModel(c domain.CheckIn) checkInModel {
 		TaskID:    c.TaskID,
 		Date:      c.Date.Time(),
 		UserID:    c.UserID,
-		Minutes:   c.Minutes,
-		Completed: c.Completed,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}
@@ -51,8 +47,6 @@ func toDomain(m checkInModel) domain.CheckIn {
 		UserID:    m.UserID,
 		TaskID:    m.TaskID,
 		Date:      calendar.NewDate(m.Date.Date()),
-		Minutes:   m.Minutes,
-		Completed: m.Completed,
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
@@ -75,7 +69,7 @@ func NewRepository(db *gorm.DB) *Repository {
 var upsert = db.OwnedUpsert{
 	Table:    "checkins",
 	Conflict: []string{"task_id", "date"},
-	Update:   []string{"minutes", "completed", "start_minute", "updated_at"},
+	Update:   []string{"start_minute", "updated_at"},
 }
 
 func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn, error) {

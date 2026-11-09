@@ -146,7 +146,7 @@ var (
 	gym    = domain.Task{Title: "Academia", Kind: domain.RecurringTask, TimesPerWeek: 3}
 	work   = domain.Task{Title: "Trabalho", Kind: domain.FixedTask}
 	thesis = domain.Task{
-		Title: "TCC", Kind: domain.OneOffTask, TotalMinutes: 1200,
+		Title: "TCC", Kind: domain.OneOffTask,
 		Deadline: calendar.NewDate(2026, time.December, 10),
 	}
 )
@@ -160,8 +160,6 @@ func TestCheckInRecurringWithoutBody(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	body := decode(t, rec)
 	assert.Equal(t, "2026-10-20", body["date"])
-	assert.Equal(t, 0.0, body["minutes"])
-	assert.Equal(t, false, body["completed"])
 	assert.NotContains(t, body, "start")
 }
 
@@ -175,21 +173,33 @@ func TestCheckInKeepsWhenTheTaskStarted(t *testing.T) {
 	assert.Equal(t, "07:15", decode(t, rec)["start"])
 }
 
-func TestCheckInOneOffWithMinutesAndHistory(t *testing.T) {
+func TestHistory(t *testing.T) {
 	srv := newServer(t)
-	id := srv.addTask(userA, thesis)
+	id := srv.addTask(userA, gym)
 	base := "/v1/tasks/" + id + "/checkins/"
 
-	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, base+"2026-10-20", "token-a", `{"minutes":90}`).Code)
-	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, base+"2026-10-22", "token-a", `{"minutes":60,"completed":true}`).Code)
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, base+"2026-10-20", "token-a", "").Code)
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, base+"2026-10-22", "token-a", "").Code)
 	rec := srv.do(http.MethodGet, "/v1/tasks/"+id+"/checkins?from=2026-10-21", "token-a", "")
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	data, ok := decode(t, rec)["data"].([]any)
 	require.True(t, ok)
 	require.Len(t, data, 1)
-	assert.Equal(t, map[string]any{"date": "2026-10-22", "minutes": 60.0, "completed": true, "taskId": id},
-		pick(data[0], "date", "minutes", "completed", "taskId"))
+	assert.Equal(t, map[string]any{"date": "2026-10-22", "taskId": id}, pick(data[0], "date", "taskId"))
+}
+
+func TestCompleteOneOffOnceUntilReopened(t *testing.T) {
+	srv := newServer(t)
+	base := "/v1/tasks/" + srv.addTask(userA, thesis) + "/checkins/"
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, base+"2026-10-20", "token-a", "").Code)
+
+	again := srv.do(http.MethodPut, base+"2026-10-22", "token-a", "")
+	require.Equal(t, http.StatusNoContent, srv.do(http.MethodDelete, base+"2026-10-20", "token-a", "").Code)
+	reopened := srv.do(http.MethodPut, base+"2026-10-22", "token-a", "")
+
+	assert.Equal(t, "one_off_already_completed", errorCode(t, again))
+	assert.Equal(t, http.StatusOK, reopened.Code, reopened.Body.String())
 }
 
 func pick(v any, keys ...string) map[string]any {
@@ -209,12 +219,11 @@ func TestCheckInRules(t *testing.T) {
 		path, body string
 		want       string
 	}{
-		"fixed task":           {workID + "/checkins/2026-10-20", "", "fixed_task_checkin"},
-		"future day":           {gymID + "/checkins/2030-01-01", "", "future_checkin"},
-		"minutes on recurring": {gymID + "/checkins/2026-10-20", `{"minutes":30}`, "checkin_one_off_only"},
-		"too many minutes":     {thesisID + "/checkins/2026-10-20", `{"minutes":2000}`, "validation_failed"},
-		"invalid start":        {gymID + "/checkins/2026-10-20", `{"start":"7h"}`, "validation_failed"},
-		"invalid date":         {gymID + "/checkins/20-10-2026", "", "validation_failed"},
+		"fixed task":    {workID + "/checkins/2026-10-20", "", "fixed_task_checkin"},
+		"future day":    {gymID + "/checkins/2030-01-01", "", "future_checkin"},
+		"unknown field": {thesisID + "/checkins/2026-10-20", `{"minutes":30}`, "validation_failed"},
+		"invalid start": {gymID + "/checkins/2026-10-20", `{"start":"7h"}`, "validation_failed"},
+		"invalid date":  {gymID + "/checkins/20-10-2026", "", "validation_failed"},
 	}
 
 	for name, tc := range cases {
@@ -278,10 +287,7 @@ func TestWeekProgress(t *testing.T) {
 	for _, day := range []string{"2026-10-20", "2026-10-21", "2026-10-26"} {
 		require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/checkins/"+day, "token-a", "").Code)
 	}
-	for day, minutes := range map[string]string{"2026-10-15": "120", "2026-10-22": "90"} {
-		require.Equal(t, http.StatusOK,
-			srv.do(http.MethodPut, "/v1/tasks/"+thesisID+"/checkins/"+day, "token-a", `{"minutes":`+minutes+`}`).Code)
-	}
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+thesisID+"/checkins/2026-10-22", "token-a", "").Code)
 
 	rec := srv.do(http.MethodGet, "/v1/progress?week=2026-10-22", "token-a", "")
 
@@ -294,8 +300,7 @@ func TestWeekProgress(t *testing.T) {
 		"days": []any{"2026-10-20", "2026-10-21"},
 	}}, body["recurring"])
 	assert.Equal(t, []any{map[string]any{
-		"taskId": thesisID, "title": "TCC", "totalMinutes": 1200.0, "deadline": "2026-12-10",
-		"weekMinutes": 90.0, "doneMinutes": 210.0,
+		"taskId": thesisID, "title": "TCC", "deadline": "2026-12-10", "completedOn": "2026-10-22",
 	}}, body["oneOff"])
 }
 

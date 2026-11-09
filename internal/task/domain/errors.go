@@ -24,8 +24,6 @@ var (
 
 	ErrInvalidSessionDuration = invalid("task_invalid_session_duration",
 		"A duração de cada sessão precisa ficar entre 5 minutos e 12 horas.")
-	ErrInvalidTotalDuration = invalid("task_invalid_total_duration",
-		"A duração total precisa ficar entre 5 minutos e 100 horas.")
 )
 
 func invalid(code, message string) error {

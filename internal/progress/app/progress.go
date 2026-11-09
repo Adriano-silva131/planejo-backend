@@ -29,7 +29,13 @@ func (p *Progress) CheckIn(
 	if err != nil {
 		return domain.CheckIn{}, err
 	}
-	c, err := domain.NewCheckIn(userID, task, e, calendar.DateOf(p.now().In(loc)))
+	var existing []domain.CheckIn
+	if task.Kind == domain.OneOffTask {
+		if existing, err = p.repo.List(ctx, userID, domain.Filter{TaskID: taskID}); err != nil {
+			return domain.CheckIn{}, err
+		}
+	}
+	c, err := domain.NewCheckIn(userID, task, e, calendar.DateOf(p.now().In(loc)), existing)
 	if err != nil {
 		return domain.CheckIn{}, err
 	}
@@ -54,7 +60,7 @@ func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date
 	if err != nil {
 		return domain.WeekSummary{}, err
 	}
-	// One-off tasks add up every check-in until the end of the week.
+	// A one-off task completed before the week is left out.
 	checkIns, err := p.repo.List(ctx, userID, domain.Filter{To: day.StartOfWeek().AddDays(6)})
 	if err != nil {
 		return domain.WeekSummary{}, err

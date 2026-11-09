@@ -26,9 +26,8 @@ type Task struct {
 	// Weekdays and TimesPerWeek, their count, describe a recurring task.
 	Weekdays     calendar.Weekdays
 	TimesPerWeek int
-	// TotalMinutes and Deadline describe a one-off task.
-	TotalMinutes int
-	Deadline     calendar.Date
+	// Deadline describes a one-off task.
+	Deadline calendar.Date
 	// CreatedAt is when the task was created. CreatedOn is that day in UTC,
 	// or in the user's time zone when the caller knows it.
 	CreatedAt time.Time

@@ -9,18 +9,14 @@ import (
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 )
 
-const MaxMinutesPerDay = 24 * 60
-
 // CheckIn records that a task was done on a day. A task has at most one
 // check-in per day, on the day it really happened, which may differ from the
-// days the task is set for.
+// days the task is set for. A one-off task has at most one check-in: the day
+// it was completed.
 type CheckIn struct {
 	UserID uuid.UUID
 	TaskID uuid.UUID
 	Date   calendar.Date
-	// Minutes worked that day and Completed apply only to one-off tasks.
-	Minutes   int
-	Completed bool
 	// Start is when the task was really started that day, if the user said.
 	Start     calendar.OptionalTime
 	CreatedAt time.Time
@@ -29,15 +25,14 @@ type CheckIn struct {
 
 // Entry is what the user reports for a day.
 type Entry struct {
-	Date      calendar.Date
-	Minutes   int
-	Completed bool
-	Start     calendar.OptionalTime
+	Date  calendar.Date
+	Start calendar.OptionalTime
 }
 
 // NewCheckIn marks task as done. today is the latest day the user can be in:
-// a day after it has not happened yet.
-func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date) (CheckIn, error) {
+// a day after it has not happened yet. existing are the task's check-ins so
+// far, which keep a one-off task from being completed twice.
+func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date, existing []CheckIn) (CheckIn, error) {
 	switch {
 	case task.Kind == FixedTask:
 		return CheckIn{}, ErrFixedTaskCheckIn
@@ -45,21 +40,21 @@ func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date) (Chec
 		return CheckIn{}, calendar.ErrInvalidDate
 	case e.Date.After(today):
 		return CheckIn{}, ErrFutureCheckIn
-	case task.Kind != OneOffTask && (e.Minutes != 0 || e.Completed):
-		return CheckIn{}, ErrOneOffOnly
-	case e.Minutes < 0 || e.Minutes > MaxMinutesPerDay:
-		return CheckIn{}, ErrInvalidMinutes
 	case !e.Start.Valid():
 		return CheckIn{}, calendar.ErrInvalidTime
+	case task.Kind == OneOffTask && completedOtherDay(existing, e.Date):
+		return CheckIn{}, ErrAlreadyCompleted
 	}
-	return CheckIn{
-		UserID:    userID,
-		TaskID:    task.ID,
-		Date:      e.Date,
-		Minutes:   e.Minutes,
-		Completed: e.Completed,
-		Start:     e.Start,
-	}, nil
+	return CheckIn{UserID: userID, TaskID: task.ID, Date: e.Date, Start: e.Start}, nil
+}
+
+func completedOtherDay(checkIns []CheckIn, date calendar.Date) bool {
+	for _, c := range checkIns {
+		if c.Date != date {
+			return true
+		}
+	}
+	return false
 }
 
 // Filter narrows a listing. Zero fields do not filter; dates are inclusive.

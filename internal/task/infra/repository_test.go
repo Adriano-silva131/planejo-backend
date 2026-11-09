@@ -50,7 +50,7 @@ func details(t *testing.T) map[string]domain.Details {
 			Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
 		}},
 		"one-off": {Title: "Relatório", Area: "Trabalho", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
-			Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
+			Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
 		}},
 	}
 }

@@ -38,9 +38,9 @@ func TestToProgressTask(t *testing.T) {
 			},
 		},
 		"one-off": {
-			taskdomain.OneOffSchedule{Duration: 20 * time.Hour, Deadline: deadline},
+			taskdomain.OneOffSchedule{Deadline: deadline},
 			progressdomain.Task{
-				ID: id, Title: "T", Kind: progressdomain.OneOffTask, TotalMinutes: 1200, Deadline: deadline,
+				ID: id, Title: "T", Kind: progressdomain.OneOffTask, Deadline: deadline,
 				CreatedAt: createdAt, CreatedOn: createdOn,
 			},
 		},

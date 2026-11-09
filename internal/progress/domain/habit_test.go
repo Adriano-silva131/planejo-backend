@@ -23,7 +23,7 @@ func gymHabit(t *testing.T) Task {
 func checks(task Task, days ...int) []CheckIn {
 	out := make([]CheckIn, 0, len(days))
 	for _, d := range days {
-		out = append(out, checkIn(task, day(d), 0, false))
+		out = append(out, checkIn(task, day(d)))
 	}
 	return out
 }

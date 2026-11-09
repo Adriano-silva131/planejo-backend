@@ -24,10 +24,7 @@ type RecurringProgress struct {
 }
 
 type OneOffProgress struct {
-	Task        Task
-	WeekMinutes int
-	// DoneMinutes adds up every check-in until the end of the week.
-	DoneMinutes int
+	Task Task
 	// CompletedOn is zero while the task is open.
 	CompletedOn calendar.Date
 }
@@ -54,7 +51,7 @@ func Summarize(day calendar.Date, tasks []Task, checkIns []CheckIn) WeekSummary 
 		case RecurringTask:
 			s.Recurring = append(s.Recurring, s.recurring(t, byTask[t.ID]))
 		case OneOffTask:
-			if p := s.oneOff(t, byTask[t.ID]); p.CompletedOn.IsZero() || !p.CompletedOn.Before(s.Start) {
+			if p := oneOff(t, byTask[t.ID]); p.CompletedOn.IsZero() || !p.CompletedOn.Before(s.Start) {
 				s.OneOff = append(s.OneOff, p)
 			}
 		}
@@ -76,14 +73,10 @@ func (s WeekSummary) recurring(t Task, checkIns []CheckIn) RecurringProgress {
 	return p
 }
 
-func (s WeekSummary) oneOff(t Task, checkIns []CheckIn) OneOffProgress {
+func oneOff(t Task, checkIns []CheckIn) OneOffProgress {
 	p := OneOffProgress{Task: t}
 	for _, c := range checkIns {
-		p.DoneMinutes += c.Minutes
-		if s.contains(c.Date) {
-			p.WeekMinutes += c.Minutes
-		}
-		if c.Completed && (p.CompletedOn.IsZero() || c.Date.Before(p.CompletedOn)) {
+		if p.CompletedOn.IsZero() || c.Date.Before(p.CompletedOn) {
 			p.CompletedOn = c.Date
 		}
 	}
