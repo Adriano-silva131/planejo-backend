@@ -73,6 +73,10 @@ type Repository interface {
 	// deleted meanwhile.
 	Save(ctx context.Context, c CheckIn) (CheckIn, error)
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
+	DeleteForTask(ctx context.Context, userID, taskID uuid.UUID) error
+	// LockTask makes other check-ins of the task wait until the transaction
+	// in ctx ends.
+	LockTask(ctx context.Context, userID, taskID uuid.UUID) error
 	// List returns the matching check-ins, oldest first.
 	List(ctx context.Context, userID uuid.UUID, f Filter) ([]CheckIn, error)
 	// SaveSchedule keeps the schedule a task had until s.Until. When the

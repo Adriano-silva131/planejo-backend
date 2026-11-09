@@ -27,12 +27,8 @@ var (
 // fakeTasks knows class, which is fixed, and gym, which is recurring.
 type fakeTasks struct{}
 
-func (fakeTasks) Fixed(context.Context, uuid.UUID, calendar.Date, calendar.Date) ([]domain.FixedTask, error) {
-	return []domain.FixedTask{class}, nil
-}
-
-func (fakeTasks) Plannable(context.Context, uuid.UUID) ([]domain.PlannableTask, error) {
-	return []domain.PlannableTask{gym}, nil
+func (fakeTasks) List(context.Context, uuid.UUID) ([]domain.FixedTask, []domain.PlannableTask, error) {
+	return []domain.FixedTask{class}, []domain.PlannableTask{gym}, nil
 }
 
 func (fakeTasks) GetFixed(_ context.Context, _, id uuid.UUID) (domain.FixedTask, error) {

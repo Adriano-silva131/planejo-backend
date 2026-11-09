@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 	"github.com/Adriano-silva131/planejo-backend/internal/task/domain"
 )
 
@@ -57,12 +56,6 @@ func (s *Tasks) List(ctx context.Context, userID uuid.UUID, page, perPage int) (
 // All returns every task of the user, for modules that need the whole set.
 func (s *Tasks) All(ctx context.Context, userID uuid.UUID) ([]domain.Task, error) {
 	return s.repo.All(ctx, userID)
-}
-
-// Fixed returns the fixed tasks that may occur from from to to, for modules
-// that build a period from them.
-func (s *Tasks) Fixed(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]domain.Task, error) {
-	return s.repo.Fixed(ctx, userID, from, to)
 }
 
 // Areas lists the areas the user has used, for the client to suggest.

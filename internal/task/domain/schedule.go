@@ -14,8 +14,7 @@ const (
 	// Recurring is done a number of times a week, on any days; the user
 	// places each session in the week.
 	Recurring Kind = "recurring"
-	// OneOff is done once, by a deadline. It has no estimate: how long it takes
-	// is hard to know beforehand.
+	// OneOff is done once, by a deadline, with no estimate.
 	OneOff Kind = "one_off"
 )
 
@@ -64,7 +63,7 @@ func (s FixedSchedule) validate() error {
 	return nil
 }
 
-// MaxTimesPerWeek is one session a day: a task is checked in once a day.
+// MaxTimesPerWeek allows one session a day.
 const MaxTimesPerWeek = 7
 
 // RecurringSchedule is done TimesPerWeek times a week, on any days, taking

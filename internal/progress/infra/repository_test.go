@@ -159,6 +159,28 @@ func TestDelete(t *testing.T) {
 	assert.ErrorIs(t, f.repo.Delete(t.Context(), userA, task, monday), domain.ErrCheckInNotFound)
 }
 
+func TestDeleteForTask(t *testing.T) {
+	f := newFixture(t)
+	task, other := f.task(userA), f.task(userA)
+	f.save(userA, task, monday)
+	f.save(userA, task, monday.AddDays(1))
+	f.save(userA, other, monday)
+
+	require.NoError(t, f.repo.DeleteForTask(t.Context(), userB, task))
+	require.Len(t, f.list(userA, domain.Filter{TaskID: task}), 2, "another user deletes nothing")
+
+	require.NoError(t, f.repo.DeleteForTask(t.Context(), userA, task))
+	assert.Empty(t, f.list(userA, domain.Filter{TaskID: task}))
+	assert.Len(t, f.list(userA, domain.Filter{TaskID: other}), 1)
+}
+
+func TestLockTask(t *testing.T) {
+	f := newFixture(t)
+
+	assert.NoError(t, f.repo.LockTask(t.Context(), userA, f.task(userA)))
+	assert.NoError(t, f.repo.LockTask(t.Context(), userA, uuid.New()), "an unknown task locks nothing")
+}
+
 func TestDeletingTheTaskRemovesItsCheckIns(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)

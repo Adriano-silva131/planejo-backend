@@ -99,6 +99,8 @@ func TestDateArithmetic(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, thursday.Equal(parsed))
 	assert.False(t, thursday.Equal(thursday.AddDays(1)))
+	assert.Equal(t, 4, thursday.AddDays(4).DaysSince(thursday))
+	assert.Equal(t, -3, thursday.AddDays(-3).DaysSince(thursday))
 }
 
 func TestStartOfWeekIsMonday(t *testing.T) {

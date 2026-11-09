@@ -203,6 +203,11 @@ func (d Date) AddDays(n int) Date {
 	return Date{t: d.t.AddDate(0, 0, n)}
 }
 
+// DaysSince returns how many days d is after other; negative when before.
+func (d Date) DaysSince(other Date) int {
+	return int(d.t.Sub(other.t) / (24 * time.Hour))
+}
+
 func (d Date) Equal(other Date) bool {
 	return d.t.Equal(other.t)
 }

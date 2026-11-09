@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/progress/app"
@@ -91,7 +92,7 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewProgress(tasks, infra.NewRepository(tx)))
+	Register(router.Authenticated, app.NewProgress(tasks, infra.NewRepository(tx), db.NewTransactor(tx)))
 	return server{t: t, tx: tx, tasks: tasks, handler: router.Handler}
 }
 

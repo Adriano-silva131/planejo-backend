@@ -38,10 +38,42 @@ func (f fakeTasks) List(context.Context, uuid.UUID) ([]domain.Task, error) {
 	return out, nil
 }
 
+// fakeTx counts the transactions; ctx tells fn it runs in one.
+type fakeTx struct {
+	count int
+}
+
+type inTxKey struct{}
+
+func (f *fakeTx) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	f.count++
+	return fn(context.WithValue(ctx, inTxKey{}, true))
+}
+
+func inTx(ctx context.Context) bool {
+	in, _ := ctx.Value(inTxKey{}).(bool)
+	return in
+}
+
 type fakeRepo struct {
 	saved     []domain.CheckIn
 	filter    domain.Filter
 	schedules map[uuid.UUID][]domain.PastSchedule
+	// lockedInTx holds the tasks locked inside a transaction.
+	lockedInTx []uuid.UUID
+	deletedFor []uuid.UUID
+}
+
+func (r *fakeRepo) LockTask(ctx context.Context, _, taskID uuid.UUID) error {
+	if inTx(ctx) {
+		r.lockedInTx = append(r.lockedInTx, taskID)
+	}
+	return nil
+}
+
+func (r *fakeRepo) DeleteForTask(_ context.Context, _, taskID uuid.UUID) error {
+	r.deletedFor = append(r.deletedFor, taskID)
+	return nil
 }
 
 func (r *fakeRepo) SaveSchedule(_ context.Context, _, taskID uuid.UUID, s domain.PastSchedule) error {
@@ -71,7 +103,7 @@ func (r *fakeRepo) List(_ context.Context, _ uuid.UUID, f domain.Filter) ([]doma
 }
 
 func newProgress(repo *fakeRepo, now time.Time) *Progress {
-	p := NewProgress(fakeTasks{gym.ID: gym}, repo)
+	p := NewProgress(fakeTasks{gym.ID: gym}, repo, &fakeTx{})
 	p.now = func() time.Time { return now }
 	return p
 }
@@ -85,6 +117,28 @@ func TestCheckInSavesValidEntry(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []domain.CheckIn{{UserID: userID, TaskID: gym.ID, Date: day}}, repo.saved)
+}
+
+func TestCheckInLocksTheTaskInATransaction(t *testing.T) {
+	repo := &fakeRepo{}
+	tx := &fakeTx{}
+	p := NewProgress(fakeTasks{gym.ID: gym}, repo, tx)
+	p.now = func() time.Time { return time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC) }
+
+	_, err := p.CheckIn(t.Context(), userID, gym.ID, domain.Entry{Date: calendar.NewDate(2026, time.October, 27)}, time.UTC)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, tx.count)
+	assert.Equal(t, []uuid.UUID{gym.ID}, repo.lockedInTx)
+}
+
+func TestBecameOneOffDropsTheCheckIns(t *testing.T) {
+	repo := &fakeRepo{}
+
+	err := newProgress(repo, time.Now()).BecameOneOff(t.Context(), userID, gym.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{gym.ID}, repo.deletedFor)
 }
 
 func TestCheckInTodayIsInTheUsersTimeZone(t *testing.T) {
@@ -127,7 +181,7 @@ func TestHabitsUseTheUsersTimeZone(t *testing.T) {
 		CreatedOn: calendar.NewDate(2026, time.October, 26),
 	}
 	repo := &fakeRepo{saved: []domain.CheckIn{{TaskID: reading.ID, Date: calendar.NewDate(2026, time.October, 25)}}}
-	p := NewProgress(fakeTasks{reading.ID: reading}, repo)
+	p := NewProgress(fakeTasks{reading.ID: reading}, repo, &fakeTx{})
 	// Monday 2026-10-26 at 01:00 in São Paulo: the week of the 19th is over.
 	p.now = func() time.Time { return time.Date(2026, time.October, 26, 4, 0, 0, 0, time.UTC) }
 

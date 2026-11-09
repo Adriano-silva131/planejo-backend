@@ -26,13 +26,24 @@ func (l routineListener) ScheduleChanged(ctx context.Context, userID uuid.UUID, 
 	return l.routine.ScheduleChanged(ctx, userID, after.ID, fixed)
 }
 
-// progressListener tells progress how a habit repeated and repeats.
+// progressListener tells progress how a habit repeated and repeats, and when
+// a task became one-off.
 type progressListener struct {
 	progress *progressapp.Progress
 }
 
 func (l progressListener) ScheduleChanged(ctx context.Context, userID uuid.UUID, before, after taskdomain.Task) error {
-	return l.progress.ScheduleChanged(ctx, userID, after.ID, recurrence(before), recurrence(after))
+	if err := l.progress.ScheduleChanged(ctx, userID, after.ID, recurrence(before), recurrence(after)); err != nil {
+		return err
+	}
+	if isOneOff(after) && !isOneOff(before) {
+		return l.progress.BecameOneOff(ctx, userID, after.ID)
+	}
+	return nil
+}
+
+func isOneOff(t taskdomain.Task) bool {
+	return t.Schedule.Kind() == taskdomain.OneOff
 }
 
 // recurrence returns how a recurring task repeats; zero for others.

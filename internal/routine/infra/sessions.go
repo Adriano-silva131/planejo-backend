@@ -73,13 +73,12 @@ func (r *SessionRepository) Save(ctx context.Context, s domain.Session) (domain.
 }
 
 func (r *SessionRepository) Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
-	res := db.Conn(ctx, r.db).
-		Where("user_id = ? AND task_id = ? AND date = ?", userID, taskID, date.Time()).
-		Delete(&sessionModel{})
-	if res.Error != nil {
-		return fmt.Errorf("routine: delete session: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
+	key := db.TaskDay{UserID: userID, TaskID: taskID, Date: date.Time()}
+	deleted, err := db.DeleteTaskDay(ctx, r.db, &sessionModel{}, key)
+	switch {
+	case err != nil:
+		return fmt.Errorf("routine: delete session: %w", err)
+	case !deleted:
 		return domain.ErrSessionNotFound
 	}
 	return nil

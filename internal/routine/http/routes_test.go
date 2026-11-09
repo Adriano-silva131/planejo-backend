@@ -56,24 +56,19 @@ type ownedTask struct {
 // fakeTasks stands in for the task module, which main wires in production.
 type fakeTasks map[uuid.UUID]ownedTask
 
-func (f fakeTasks) Fixed(_ context.Context, userID uuid.UUID, _, _ calendar.Date) ([]domain.FixedTask, error) {
-	var out []domain.FixedTask
+func (f fakeTasks) List(_ context.Context, userID uuid.UUID) ([]domain.FixedTask, []domain.PlannableTask, error) {
+	var fixed []domain.FixedTask
+	var plannable []domain.PlannableTask
 	for _, t := range f {
-		if t.owner == userID && t.plannable == nil {
-			out = append(out, t.task)
+		switch {
+		case t.owner != userID:
+		case t.plannable != nil:
+			plannable = append(plannable, *t.plannable)
+		default:
+			fixed = append(fixed, t.task)
 		}
 	}
-	return out, nil
-}
-
-func (f fakeTasks) Plannable(_ context.Context, userID uuid.UUID) ([]domain.PlannableTask, error) {
-	var out []domain.PlannableTask
-	for _, t := range f {
-		if t.owner == userID && t.plannable != nil {
-			out = append(out, *t.plannable)
-		}
-	}
-	return out, nil
+	return fixed, plannable, nil
 }
 
 func (f fakeTasks) GetFixed(_ context.Context, userID, id uuid.UUID) (domain.FixedTask, error) {

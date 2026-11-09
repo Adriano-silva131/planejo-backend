@@ -10,6 +10,10 @@ ALTER TABLE tasks ADD CONSTRAINT tasks_one_off_shape CHECK (kind <> 'one_off' OR
 
 DELETE FROM checkins c USING tasks t
 WHERE c.task_id = t.id AND t.kind = 'one_off' AND NOT c.completed;
+-- A one-off completed on more than one day keeps the first.
+DELETE FROM checkins c USING tasks t, checkins earlier
+WHERE c.task_id = t.id AND t.kind = 'one_off'
+  AND earlier.task_id = c.task_id AND earlier.completed AND earlier.date < c.date;
 ALTER TABLE checkins DROP COLUMN minutes, DROP COLUMN completed;
 
 -- +goose Down

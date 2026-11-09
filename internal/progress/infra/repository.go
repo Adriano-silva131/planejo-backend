@@ -85,14 +85,30 @@ func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn
 }
 
 func (r *Repository) Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
-	res := db.Conn(ctx, r.db).
-		Where("user_id = ? AND task_id = ? AND date = ?", userID, taskID, date.Time()).
-		Delete(&checkInModel{})
-	if res.Error != nil {
-		return fmt.Errorf("checkin: delete: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
+	key := db.TaskDay{UserID: userID, TaskID: taskID, Date: date.Time()}
+	deleted, err := db.DeleteTaskDay(ctx, r.db, &checkInModel{}, key)
+	switch {
+	case err != nil:
+		return fmt.Errorf("checkin: delete: %w", err)
+	case !deleted:
 		return domain.ErrCheckInNotFound
+	}
+	return nil
+}
+
+func (r *Repository) DeleteForTask(ctx context.Context, userID, taskID uuid.UUID) error {
+	err := db.Conn(ctx, r.db).Where("user_id = ? AND task_id = ?", userID, taskID).Delete(&checkInModel{}).Error
+	if err != nil {
+		return fmt.Errorf("checkin: delete for task: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) LockTask(ctx context.Context, userID, taskID uuid.UUID) error {
+	err := db.Conn(ctx, r.db).
+		Exec("SELECT 1 FROM tasks WHERE id = ? AND user_id = ? FOR UPDATE", taskID, userID).Error
+	if err != nil {
+		return fmt.Errorf("checkin: lock task: %w", err)
 	}
 	return nil
 }

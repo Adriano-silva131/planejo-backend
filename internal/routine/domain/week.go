@@ -143,21 +143,8 @@ func (w *Week) placeSessions(plannable []PlannableTask, sessions []Session) {
 		byID[t.ID] = t
 	}
 	for _, s := range sessions {
-		t, ok := byID[s.TaskID]
-		offset := w.offsetOf(s.Date)
-		if !ok || offset < 0 {
-			continue
-		}
-		w.add(offset, Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: t.Kind, Start: s.Start, End: s.End})
-	}
-}
-
-// offsetOf returns the index of date in the week, or -1 outside it.
-func (w *Week) offsetOf(date calendar.Date) int {
-	for i, d := range w.Days {
-		if d.Date.Equal(date) {
-			return i
+		if t, ok := byID[s.TaskID]; ok {
+			w.add(s.Date.DaysSince(w.Start), Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: t.Kind, Start: s.Start, End: s.End})
 		}
 	}
-	return -1
 }

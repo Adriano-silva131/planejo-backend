@@ -19,34 +19,23 @@ type routineTasks struct {
 
 var _ routinedomain.Tasks = routineTasks{}
 
-func (r routineTasks) Fixed(
-	ctx context.Context, userID uuid.UUID, from, to calendar.Date,
-) ([]routinedomain.FixedTask, error) {
-	tasks, err := r.tasks.Fixed(ctx, userID, from, to)
+func (r routineTasks) List(
+	ctx context.Context, userID uuid.UUID,
+) ([]routinedomain.FixedTask, []routinedomain.PlannableTask, error) {
+	tasks, err := r.tasks.All(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var fixed []routinedomain.FixedTask
+	var plannable []routinedomain.PlannableTask
 	for _, t := range tasks {
 		if f, ok := toFixedTask(t); ok {
 			fixed = append(fixed, f)
-		}
-	}
-	return fixed, nil
-}
-
-func (r routineTasks) Plannable(ctx context.Context, userID uuid.UUID) ([]routinedomain.PlannableTask, error) {
-	tasks, err := r.tasks.All(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	var plannable []routinedomain.PlannableTask
-	for _, t := range tasks {
-		if p, ok := toPlannableTask(t); ok {
+		} else if p, ok := toPlannableTask(t); ok {
 			plannable = append(plannable, p)
 		}
 	}
-	return plannable, nil
+	return fixed, plannable, nil
 }
 
 func (r routineTasks) GetFixed(ctx context.Context, userID, id uuid.UUID) (routinedomain.FixedTask, error) {

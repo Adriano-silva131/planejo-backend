@@ -28,7 +28,7 @@ type Adjustment struct {
 type Change struct {
 	Skip  bool
 	Start calendar.TimeOfDay
-	End   calendar.OptionalTime
+	End   calendar.TimeOfDay
 }
 
 func NewAdjustment(userID uuid.UUID, task FixedTask, date calendar.Date, c Change) (Adjustment, error) {
@@ -42,14 +42,10 @@ func NewAdjustment(userID uuid.UUID, task FixedTask, date calendar.Date, c Chang
 	if !c.Start.Valid() || !c.End.Valid() {
 		return Adjustment{}, calendar.ErrInvalidTime
 	}
-	end, ok := c.End.Get()
-	if !ok {
-		return Adjustment{}, ErrEndRequired
-	}
-	if c.Start == end {
+	if c.Start == c.End {
 		return Adjustment{}, ErrInvalidTimeRange
 	}
-	a.Skipped, a.Start, a.End = false, c.Start, end
+	a.Skipped, a.Start, a.End = false, c.Start, c.End
 	return a, nil
 }
 

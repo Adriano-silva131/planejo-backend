@@ -90,13 +90,12 @@ func (r *Repository) Save(ctx context.Context, a domain.Adjustment) (domain.Adju
 }
 
 func (r *Repository) Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
-	res := db.Conn(ctx, r.db).
-		Where("user_id = ? AND task_id = ? AND date = ?", userID, taskID, date.Time()).
-		Delete(&adjustmentModel{})
-	if res.Error != nil {
-		return fmt.Errorf("routine: delete adjustment: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
+	key := db.TaskDay{UserID: userID, TaskID: taskID, Date: date.Time()}
+	deleted, err := db.DeleteTaskDay(ctx, r.db, &adjustmentModel{}, key)
+	switch {
+	case err != nil:
+		return fmt.Errorf("routine: delete adjustment: %w", err)
+	case !deleted:
 		return domain.ErrAdjustmentNotFound
 	}
 	return nil

@@ -24,7 +24,7 @@ type taskFields struct {
 	End      string   `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"fixed: fim, no fuso do usuário; antes do início, termina no dia seguinte" example:"18:00"`
 
 	TimesPerWeek    int    `json:"timesPerWeek,omitempty" minimum:"1" maximum:"7" doc:"recurring: quantas vezes por semana, em qualquer dia" example:"3"`
-	DurationMinutes int    `json:"durationMinutes,omitempty" minimum:"5" maximum:"6000" doc:"recurring: duração de cada sessão" example:"60"`
+	DurationMinutes int    `json:"durationMinutes,omitempty" minimum:"5" maximum:"720" doc:"recurring: duração de cada sessão" example:"60"`
 	Deadline        string `json:"deadline,omitempty" format:"date" doc:"one_off: último dia para concluir"`
 	Period          string `json:"period,omitempty" enum:"morning,afternoon,evening" doc:"recurring e one_off: período preferido, opcional" example:"morning"`
 }

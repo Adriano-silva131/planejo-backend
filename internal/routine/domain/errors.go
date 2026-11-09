@@ -12,7 +12,6 @@ var (
 var (
 	ErrNoOccurrences    = invalid("task_without_occurrences", "Só tarefas fixas têm ocorrências; encaixe uma sessão desta tarefa.")
 	ErrFixedTaskSession = invalid("fixed_task_session", "Tarefa fixa já tem horário; ajuste a ocorrência dela.")
-	ErrEndRequired      = invalid("adjustment_end_required", "Informe o fim: tarefa fixa não tem duração própria.")
 	ErrNotAnOccurrence  = invalid("not_an_occurrence", "A tarefa não acontece neste dia.")
 	ErrInvalidTimeRange = invalid("adjustment_invalid_time_range", "O início e o fim não podem ser iguais.")
 

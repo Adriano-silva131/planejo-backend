@@ -48,7 +48,7 @@ func (f changeFields) change() (domain.Change, error) {
 	if err != nil {
 		return domain.Change{}, err
 	}
-	end, err := calendar.ParseOptionalTimeOfDay(f.End)
+	end, err := calendar.ParseTimeOfDay(f.End)
 	if err != nil {
 		return domain.Change{}, err
 	}

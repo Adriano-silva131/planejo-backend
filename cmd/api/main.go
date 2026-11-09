@@ -123,7 +123,7 @@ func registerRoutes(router httpx.Router, gdb *gorm.DB) {
 	tasks := taskapp.NewTasks(taskinfra.NewRepository(gdb), db.NewTransactor(gdb))
 	taskhttp.Register(router.Authenticated, tasks)
 
-	progress := progressapp.NewProgress(progressTasks{tasks: tasks}, progressinfra.NewRepository(gdb))
+	progress := progressapp.NewProgress(progressTasks{tasks: tasks}, progressinfra.NewRepository(gdb), db.NewTransactor(gdb))
 	progresshttp.Register(router.Authenticated, progress)
 
 	routine := routineapp.NewRoutine(

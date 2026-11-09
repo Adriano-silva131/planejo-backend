@@ -26,7 +26,7 @@ func NewRoutine(tasks domain.Tasks, repo domain.Repository, sessions domain.Sess
 func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date) (domain.Week, error) {
 	monday := day.StartOfWeek()
 	from, to := monday.AddDays(-1), monday.AddDays(6)
-	tasks, err := r.tasks.Fixed(ctx, userID, from, to)
+	fixed, plannable, err := r.tasks.List(ctx, userID)
 	if err != nil {
 		return domain.Week{}, err
 	}
@@ -34,15 +34,11 @@ func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date)
 	if err != nil {
 		return domain.Week{}, err
 	}
-	plannable, err := r.tasks.Plannable(ctx, userID)
-	if err != nil {
-		return domain.Week{}, err
-	}
 	sessions, err := r.sessions.List(ctx, userID, monday, to)
 	if err != nil {
 		return domain.Week{}, err
 	}
-	return domain.BuildWeek(day, tasks, adjustments, plannable, sessions), nil
+	return domain.BuildWeek(day, fixed, adjustments, plannable, sessions), nil
 }
 
 // Adjust changes the occurrence of the task starting on date, replacing an

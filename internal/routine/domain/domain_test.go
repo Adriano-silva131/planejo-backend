@@ -139,9 +139,9 @@ func TestNewAdjustment(t *testing.T) {
 
 	skip, err := NewAdjustment(userID, work, day(1), Change{Skip: true})
 	require.NoError(t, err)
-	moved, err := NewAdjustment(userID, doctor, day(3), Change{Start: at(17), End: calendar.SomeTime(at(18))})
+	moved, err := NewAdjustment(userID, doctor, day(3), Change{Start: at(17), End: at(18)})
 	require.NoError(t, err)
-	overnight, err := NewAdjustment(userID, work, day(2), Change{Start: at(22), End: calendar.SomeTime(at(6))})
+	overnight, err := NewAdjustment(userID, work, day(2), Change{Start: at(22), End: at(6)})
 	require.NoError(t, err)
 
 	assert.Equal(t, Adjustment{UserID: userID, TaskID: work.ID, Date: day(1), Skipped: true}, skip)
@@ -159,9 +159,8 @@ func TestNewAdjustmentRejects(t *testing.T) {
 	}{
 		"weekday not set":    {work, day(5), Change{Skip: true}, ErrNotAnOccurrence},
 		"other date":         {doctor, day(4), Change{Skip: true}, ErrNotAnOccurrence},
-		"same start and end": {work, day(0), Change{Start: at(9), End: calendar.SomeTime(at(9))}, ErrInvalidTimeRange},
-		"time out of range":  {work, day(0), Change{Start: at(9), End: calendar.SomeTime(EndOfDay)}, calendar.ErrInvalidTime},
-		"fixed without end":  {work, day(0), Change{Start: at(9)}, ErrEndRequired},
+		"same start and end": {work, day(0), Change{Start: at(9), End: at(9)}, ErrInvalidTimeRange},
+		"time out of range":  {work, day(0), Change{Start: at(9), End: EndOfDay}, calendar.ErrInvalidTime},
 	}
 
 	for name, tc := range cases {

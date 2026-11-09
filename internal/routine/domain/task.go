@@ -44,14 +44,13 @@ type PlannableTask struct {
 	Duration time.Duration
 }
 
-// Tasks reads the user's tasks. Fixed returns the fixed tasks that may occur
-// from from to to, and Plannable every recurring and one-off task. GetFixed
+// Tasks reads the user's tasks. List returns all of them, the fixed apart
+// from the recurring and one-off ones. GetFixed
 // and GetPlannable fail with a not-found error when the task does not exist
 // or belongs to someone else, and with ErrNoOccurrences or
 // ErrFixedTaskSession when it is of the other kind.
 type Tasks interface {
-	Fixed(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]FixedTask, error)
-	Plannable(ctx context.Context, userID uuid.UUID) ([]PlannableTask, error)
+	List(ctx context.Context, userID uuid.UUID) ([]FixedTask, []PlannableTask, error)
 	GetFixed(ctx context.Context, userID, id uuid.UUID) (FixedTask, error)
 	GetPlannable(ctx context.Context, userID, id uuid.UUID) (PlannableTask, error)
 }
