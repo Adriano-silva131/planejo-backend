@@ -32,6 +32,13 @@ func TestNewCheckIn(t *testing.T) {
 	assert.Equal(t, CheckIn{UserID: userID, TaskID: thesis.ID, Date: day(1), Minutes: 90}, c)
 }
 
+func TestNewCheckInKeepsTheStart(t *testing.T) {
+	c, err := NewCheckIn(userID, gym, Entry{Date: day(1), Start: calendar.SomeTime(7 * 60)}, day(2))
+
+	require.NoError(t, err)
+	assert.Equal(t, calendar.SomeTime(7*60), c.Start)
+}
+
 func TestNewCheckInAcceptsToday(t *testing.T) {
 	_, err := NewCheckIn(userID, gym, Entry{Date: day(2)}, day(2))
 
@@ -51,6 +58,7 @@ func TestNewCheckInRejects(t *testing.T) {
 		"completed recurring":  {gym, Entry{Date: day(1), Completed: true}, ErrOneOffOnly},
 		"negative minutes":     {thesis, Entry{Date: day(1), Minutes: -1}, ErrInvalidMinutes},
 		"more than a day":      {thesis, Entry{Date: day(1), Minutes: MaxMinutesPerDay + 1}, ErrInvalidMinutes},
+		"invalid start":        {gym, Entry{Date: day(1), Start: calendar.SomeTime(24 * 60)}, calendar.ErrInvalidTime},
 	}
 
 	for name, tc := range cases {

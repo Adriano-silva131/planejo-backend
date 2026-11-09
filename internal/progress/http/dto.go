@@ -8,8 +8,9 @@ import (
 )
 
 type checkInFields struct {
-	Minutes   int  `json:"minutes,omitempty" minimum:"0" maximum:"1440" doc:"Só em tarefa pontual: minutos dedicados no dia" example:"90"`
-	Completed bool `json:"completed,omitempty" doc:"Só em tarefa pontual: concluída neste dia"`
+	Minutes   int    `json:"minutes,omitempty" minimum:"0" maximum:"1440" doc:"Só em tarefa pontual: minutos dedicados no dia" example:"90"`
+	Completed bool   `json:"completed,omitempty" doc:"Só em tarefa pontual: concluída neste dia"`
+	Start     string `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"Hora em que a tarefa começou de fato, no fuso do usuário; opcional" example:"07:15"`
 }
 
 // checkInBody always carries minutes and completed, even when zero.
@@ -18,6 +19,7 @@ type checkInBody struct {
 	Date      string    `json:"date" format:"date"`
 	Minutes   int       `json:"minutes" doc:"Minutos dedicados no dia; 0 em tarefa recorrente"`
 	Completed bool      `json:"completed" doc:"Concluída neste dia; só em tarefa pontual"`
+	Start     string    `json:"start,omitempty" doc:"Hora em que começou de fato; ausente quando não informada" example:"07:15"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -28,6 +30,7 @@ func toCheckInBody(c domain.CheckIn) checkInBody {
 		Date:      c.Date.String(),
 		Minutes:   c.Minutes,
 		Completed: c.Completed,
+		Start:     c.Start.String(),
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}

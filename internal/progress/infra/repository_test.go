@@ -70,6 +70,7 @@ func TestSaveAndList(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, monday, got[0].Date)
 	assert.Equal(t, 30, got[0].Minutes)
+	assert.Equal(t, calendar.OptionalTime{}, got[0].Start, "no start when the user did not say")
 	assert.False(t, saved.CreatedAt.IsZero())
 }
 
@@ -79,7 +80,7 @@ func TestSaveReplacesTheSameDay(t *testing.T) {
 	first := f.save(userA, task, monday, 30)
 
 	second, err := f.repo.Save(t.Context(), domain.CheckIn{
-		UserID: userA, TaskID: task, Date: monday, Minutes: 90, Completed: true,
+		UserID: userA, TaskID: task, Date: monday, Minutes: 90, Completed: true, Start: calendar.SomeTime(7*60 + 15),
 	})
 
 	require.NoError(t, err)
@@ -87,6 +88,7 @@ func TestSaveReplacesTheSameDay(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, 90, got[0].Minutes)
 	assert.True(t, got[0].Completed)
+	assert.Equal(t, calendar.SomeTime(7*60+15), got[0].Start)
 	assert.True(t, second.CreatedAt.Equal(first.CreatedAt), "created_at is kept")
 }
 

@@ -20,8 +20,10 @@ type checkInModel struct {
 	UserID    uuid.UUID
 	Minutes   int
 	Completed bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	// StartMinute is NULL when the user did not say when the task started.
+	StartMinute *int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 func (checkInModel) TableName() string {
@@ -29,7 +31,7 @@ func (checkInModel) TableName() string {
 }
 
 func toModel(c domain.CheckIn) checkInModel {
-	return checkInModel{
+	m := checkInModel{
 		TaskID:    c.TaskID,
 		Date:      c.Date.Time(),
 		UserID:    c.UserID,
@@ -38,10 +40,14 @@ func toModel(c domain.CheckIn) checkInModel {
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}
+	if start, ok := c.Start.Get(); ok {
+		m.StartMinute = new(int(start))
+	}
+	return m
 }
 
 func toDomain(m checkInModel) domain.CheckIn {
-	return domain.CheckIn{
+	c := domain.CheckIn{
 		UserID:    m.UserID,
 		TaskID:    m.TaskID,
 		Date:      calendar.NewDate(m.Date.Date()),
@@ -50,6 +56,10 @@ func toDomain(m checkInModel) domain.CheckIn {
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
+	if m.StartMinute != nil {
+		c.Start = calendar.SomeTime(calendar.TimeOfDay(*m.StartMinute))
+	}
+	return c
 }
 
 type Repository struct {
@@ -65,7 +75,7 @@ func NewRepository(db *gorm.DB) *Repository {
 var upsert = db.OwnedUpsert{
 	Table:    "checkins",
 	Conflict: []string{"task_id", "date"},
-	Update:   []string{"minutes", "completed", "updated_at"},
+	Update:   []string{"minutes", "completed", "start_minute", "updated_at"},
 }
 
 func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn, error) {

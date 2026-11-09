@@ -21,6 +21,8 @@ type CheckIn struct {
 	// Minutes worked that day and Completed apply only to one-off tasks.
 	Minutes   int
 	Completed bool
+	// Start is when the task was really started that day, if the user said.
+	Start     calendar.OptionalTime
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -30,6 +32,7 @@ type Entry struct {
 	Date      calendar.Date
 	Minutes   int
 	Completed bool
+	Start     calendar.OptionalTime
 }
 
 // NewCheckIn marks task as done. today is the latest day the user can be in:
@@ -46,6 +49,8 @@ func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date) (Chec
 		return CheckIn{}, ErrOneOffOnly
 	case e.Minutes < 0 || e.Minutes > MaxMinutesPerDay:
 		return CheckIn{}, ErrInvalidMinutes
+	case !e.Start.Valid():
+		return CheckIn{}, calendar.ErrInvalidTime
 	}
 	return CheckIn{
 		UserID:    userID,
@@ -53,6 +58,7 @@ func NewCheckIn(userID uuid.UUID, task Task, e Entry, today calendar.Date) (Chec
 		Date:      e.Date,
 		Minutes:   e.Minutes,
 		Completed: e.Completed,
+		Start:     e.Start,
 	}, nil
 }
 

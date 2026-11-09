@@ -162,6 +162,17 @@ func TestCheckInRecurringWithoutBody(t *testing.T) {
 	assert.Equal(t, "2026-10-20", body["date"])
 	assert.Equal(t, 0.0, body["minutes"])
 	assert.Equal(t, false, body["completed"])
+	assert.NotContains(t, body, "start")
+}
+
+func TestCheckInKeepsWhenTheTaskStarted(t *testing.T) {
+	srv := newServer(t)
+	path := "/v1/tasks/" + srv.addTask(userA, gym) + "/checkins/2026-10-20"
+
+	rec := srv.do(http.MethodPut, path, "token-a", `{"start":"07:15"}`)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "07:15", decode(t, rec)["start"])
 }
 
 func TestCheckInOneOffWithMinutesAndHistory(t *testing.T) {
@@ -202,6 +213,7 @@ func TestCheckInRules(t *testing.T) {
 		"future day":           {gymID + "/checkins/2030-01-01", "", "future_checkin"},
 		"minutes on recurring": {gymID + "/checkins/2026-10-20", `{"minutes":30}`, "checkin_one_off_only"},
 		"too many minutes":     {thesisID + "/checkins/2026-10-20", `{"minutes":2000}`, "validation_failed"},
+		"invalid start":        {gymID + "/checkins/2026-10-20", `{"start":"7h"}`, "validation_failed"},
 		"invalid date":         {gymID + "/checkins/20-10-2026", "", "validation_failed"},
 	}
 

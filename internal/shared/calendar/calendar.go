@@ -106,6 +106,46 @@ func (t TimeOfDay) String() string {
 	return fmt.Sprintf("%02d:%02d", int(t)/60, int(t)%60)
 }
 
+// OptionalTime is a TimeOfDay that may be absent. The zero value is absent;
+// values are comparable with ==.
+type OptionalTime struct {
+	time TimeOfDay
+	set  bool
+}
+
+func SomeTime(t TimeOfDay) OptionalTime {
+	return OptionalTime{time: t, set: true}
+}
+
+// ParseOptionalTimeOfDay is ParseTimeOfDay where an empty string is absent.
+func ParseOptionalTimeOfDay(s string) (OptionalTime, error) {
+	if s == "" {
+		return OptionalTime{}, nil
+	}
+	t, err := ParseTimeOfDay(s)
+	if err != nil {
+		return OptionalTime{}, err
+	}
+	return SomeTime(t), nil
+}
+
+func (o OptionalTime) Get() (TimeOfDay, bool) {
+	return o.time, o.set
+}
+
+// Valid reports whether o is absent or a valid time.
+func (o OptionalTime) Valid() bool {
+	return !o.set || o.time.Valid()
+}
+
+// String formats the "15:04" layout; an absent time is empty.
+func (o OptionalTime) String() string {
+	if !o.set {
+		return ""
+	}
+	return o.time.String()
+}
+
 // Date is a calendar day, without time or time zone. Dates are comparable
 // with == and can be map keys.
 type Date struct {
