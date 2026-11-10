@@ -122,6 +122,29 @@ func TestListOnlyThePeriodAndTheUser(t *testing.T) {
 	assert.Equal(t, monday.AddDays(6), got[1].Date)
 }
 
+func TestListWithoutEnd(t *testing.T) {
+	f := newFixture(t)
+	task := f.task(userA)
+	for _, date := range []calendar.Date{monday.AddDays(-1), monday, monday.AddDays(400)} {
+		_, err := f.repo.Save(t.Context(), moved(userA, task, date))
+		require.NoError(t, err)
+	}
+
+	got, err := f.repo.List(t.Context(), userA, monday, calendar.Date{})
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, monday, got[0].Date)
+	assert.Equal(t, monday.AddDays(400), got[1].Date)
+}
+
+func TestLock(t *testing.T) {
+	f := newFixture(t)
+
+	require.NoError(t, f.repo.Lock(t.Context(), userA))
+	assert.NoError(t, f.repo.Lock(t.Context(), userA), "the same transaction can lock again")
+}
+
 func TestDelete(t *testing.T) {
 	f := newFixture(t)
 	task := f.task(userA)

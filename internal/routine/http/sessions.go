@@ -15,8 +15,8 @@ func registerSessions(api huma.API, h handler) {
 	huma.Register(api, huma.Operation{
 		OperationID: "place-session", Method: http.MethodPut, Path: "/tasks/{id}/sessions/{date}", Tags: tags,
 		Summary:     "Encaixa uma sessão de uma tarefa recorrente ou pontual num dia",
-		Description: "Reserva o horário na semana, em qualquer dia, sem alterar a tarefa. A tarefa tem no máximo uma sessão por dia: encaixar de novo no mesmo dia muda o horário. A sessão termina até a meia-noite.",
-		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+		Description: "Reserva o horário na semana, em qualquer dia, sem alterar a tarefa. A tarefa tem no máximo uma sessão por dia: encaixar de novo no mesmo dia muda o horário. A sessão termina até a meia-noite. No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusConflict},
 	}, h.placeSession)
 	huma.Register(api, huma.Operation{
 		OperationID: "remove-session", Method: http.MethodDelete, Path: "/tasks/{id}/sessions/{date}", Tags: tags,

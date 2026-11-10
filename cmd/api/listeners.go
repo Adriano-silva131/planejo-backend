@@ -26,6 +26,19 @@ func (l routineListener) ScheduleChanged(ctx context.Context, userID uuid.UUID, 
 	return l.routine.ScheduleChanged(ctx, userID, after.ID, fixed)
 }
 
+// routineChecker refuses a fixed task that makes too many things happen at
+// once in the routine.
+type routineChecker struct {
+	routine *routineapp.Routine
+}
+
+func (c routineChecker) CheckSchedule(ctx context.Context, userID uuid.UUID, task taskdomain.Task) error {
+	if fixed, ok := toFixedTask(task); ok {
+		return c.routine.CheckFixed(ctx, userID, fixed)
+	}
+	return nil
+}
+
 // progressListener tells progress how a habit repeated and repeats, and when
 // a task became one-off.
 type progressListener struct {

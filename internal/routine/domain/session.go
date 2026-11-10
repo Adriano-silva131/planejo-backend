@@ -74,7 +74,7 @@ type Sessions interface {
 	// deleted meanwhile.
 	Save(ctx context.Context, s Session) (Session, error)
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
-	// List returns the sessions from from to to.
+	// List returns the sessions from from to to; a zero to has no end.
 	List(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]Session, error)
 	// DeleteForTask removes every session of the task.
 	DeleteForTask(ctx context.Context, userID, taskID uuid.UUID) error

@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/routine/app"
@@ -112,7 +113,7 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewRoutine(tasks, infra.NewRepository(tx), infra.NewSessionRepository(tx)))
+	Register(router.Authenticated, app.NewRoutine(tasks, infra.NewRepository(tx), infra.NewSessionRepository(tx), db.NewTransactor(tx)))
 	return server{t: t, tx: tx, tasks: tasks, handler: router.Handler}
 }
 
@@ -378,6 +379,59 @@ func TestAdjustRules(t *testing.T) {
 
 	assert.Equal(t, "not_an_occurrence", errorOf(t, saturday)["code"])
 	assert.Equal(t, "adjustment_invalid_time_range", errorOf(t, same)["code"])
+}
+
+// workAndLunch adds work from 09:00 to 18:00 and lunch inside it, the two
+// layers of a weekday, and returns the lunch's id.
+func (s server) workAndLunch() string {
+	s.t.Helper()
+	s.addTask(userA, work(s.t))
+	lunch := work(s.t)
+	lunch.Title, lunch.Start, lunch.End = "Almoço", 12*60, 13*60
+	return s.addTask(userA, lunch)
+}
+
+func TestAThirdLayerIsRefused(t *testing.T) {
+	srv := newServer(t)
+	srv.workAndLunch()
+	gymID := srv.addPlannable(userA, gym())
+
+	rec := srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-26", "token-a", `{"start":"12:30"}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, map[string]any{
+		"code":    "schedule_overlap",
+		"message": "Nesse horário já há duas tarefas: Trabalho e Almoço (seg 26/10, 12:30–13:00).",
+	}, errorOf(t, rec))
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-26", "token-a", ""))
+	assert.Equal(t, []string{"Trabalho 09:00-18:00", "Almoço 12:00-13:00"}, blocks(t, week, 0), "nothing was saved")
+}
+
+func TestMovingAnOccurrenceOntoTwoLayersIsRefused(t *testing.T) {
+	srv := newServer(t)
+	lunchID := srv.workAndLunch()
+	gymID := srv.addPlannable(userA, gym())
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-27", "token-a", `{"start":"15:00"}`).Code)
+
+	rec := srv.do(http.MethodPut, "/v1/tasks/"+lunchID+"/occurrences/2026-10-27", "token-a", `{"start":"15:30","end":"16:30"}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, "schedule_overlap", errorOf(t, rec)["code"])
+}
+
+func TestResettingOntoTwoLayersIsRefused(t *testing.T) {
+	srv := newServer(t)
+	lunchID := srv.workAndLunch()
+	gymID := srv.addPlannable(userA, gym())
+	occurrence := "/v1/tasks/" + lunchID + "/occurrences/2026-10-28"
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, occurrence, "token-a", `{"skipped":true}`).Code)
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-28", "token-a", `{"start":"12:00"}`).Code)
+
+	rec := srv.do(http.MethodDelete, occurrence, "token-a", "")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-26", "token-a", ""))
+	assert.Equal(t, []string{"Trabalho 09:00-18:00", "Academia 12:00-13:00"}, blocks(t, week, 2), "lunch stays skipped")
 }
 
 func TestOtherUsersTasksAreNotFound(t *testing.T) {

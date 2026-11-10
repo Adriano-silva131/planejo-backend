@@ -24,36 +24,58 @@ var (
 	gym = domain.PlannableTask{ID: uuid.New(), Title: "Academia", Area: "Saúde", Kind: domain.RecurringKind, Duration: time.Hour}
 )
 
-// fakeTasks knows class, which is fixed, and gym, which is recurring.
-type fakeTasks struct{}
-
-func (fakeTasks) List(context.Context, uuid.UUID) ([]domain.FixedTask, []domain.PlannableTask, error) {
-	return []domain.FixedTask{class}, []domain.PlannableTask{gym}, nil
+// fakeTasks stands in for the task module; newRoutine gives it class, which
+// is fixed, and gym, which is recurring.
+type fakeTasks struct {
+	fixed     []domain.FixedTask
+	plannable []domain.PlannableTask
 }
 
-func (fakeTasks) GetFixed(_ context.Context, _, id uuid.UUID) (domain.FixedTask, error) {
-	switch id {
-	case class.ID:
-		return class, nil
-	case gym.ID:
+func (f *fakeTasks) List(context.Context, uuid.UUID) ([]domain.FixedTask, []domain.PlannableTask, error) {
+	return f.fixed, f.plannable, nil
+}
+
+func (f *fakeTasks) GetFixed(_ context.Context, _, id uuid.UUID) (domain.FixedTask, error) {
+	if i := slices.IndexFunc(f.fixed, func(t domain.FixedTask) bool { return t.ID == id }); i >= 0 {
+		return f.fixed[i], nil
+	}
+	if slices.ContainsFunc(f.plannable, func(t domain.PlannableTask) bool { return t.ID == id }) {
 		return domain.FixedTask{}, domain.ErrNoOccurrences
 	}
 	return domain.FixedTask{}, domain.ErrTaskNotFound
 }
 
-func (fakeTasks) GetPlannable(_ context.Context, _, id uuid.UUID) (domain.PlannableTask, error) {
-	switch id {
-	case gym.ID:
-		return gym, nil
-	case class.ID:
+func (f *fakeTasks) GetPlannable(_ context.Context, _, id uuid.UUID) (domain.PlannableTask, error) {
+	if i := slices.IndexFunc(f.plannable, func(t domain.PlannableTask) bool { return t.ID == id }); i >= 0 {
+		return f.plannable[i], nil
+	}
+	if slices.ContainsFunc(f.fixed, func(t domain.FixedTask) bool { return t.ID == id }) {
 		return domain.PlannableTask{}, domain.ErrFixedTaskSession
 	}
 	return domain.PlannableTask{}, domain.ErrTaskNotFound
 }
 
+// fakeTx runs fn as is; ctx tells fn it runs in a transaction.
+type fakeTx struct{}
+
+type inTxKey struct{}
+
+func (fakeTx) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(context.WithValue(ctx, inTxKey{}, true))
+}
+
 type fakeRepo struct {
 	saved    []domain.Adjustment
 	from, to calendar.Date
+	// locks counts the locks taken inside a transaction.
+	locks int
+}
+
+func (r *fakeRepo) Lock(ctx context.Context, _ uuid.UUID) error {
+	if in, _ := ctx.Value(inTxKey{}).(bool); in {
+		r.locks++
+	}
+	return nil
 }
 
 func (r *fakeRepo) Save(_ context.Context, a domain.Adjustment) (domain.Adjustment, error) {
@@ -101,8 +123,14 @@ func (s *fakeSessions) DeleteForTask(context.Context, uuid.UUID, uuid.UUID) erro
 }
 
 func newRoutine(repo *fakeRepo) (*Routine, *fakeSessions) {
+	r, sessions, _ := newRoutineWith(repo)
+	return r, sessions
+}
+
+func newRoutineWith(repo *fakeRepo) (*Routine, *fakeSessions, *fakeTasks) {
 	sessions := &fakeSessions{}
-	return NewRoutine(fakeTasks{}, repo, sessions), sessions
+	tasks := &fakeTasks{fixed: []domain.FixedTask{class}, plannable: []domain.PlannableTask{gym}}
+	return NewRoutine(tasks, repo, sessions, fakeTx{}), sessions, tasks
 }
 
 func TestWeekLoadsAdjustmentsFromTheSundayBeforeAndSessionsOfTheWeek(t *testing.T) {

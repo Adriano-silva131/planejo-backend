@@ -102,8 +102,24 @@ func (r *Repository) Delete(ctx context.Context, userID, taskID uuid.UUID, date 
 }
 
 func (r *Repository) List(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]domain.Adjustment, error) {
-	return find(db.Conn(ctx, r.db).
-		Where("user_id = ? AND date BETWEEN ? AND ?", userID, from.Time(), to.Time()))
+	return find(inPeriod(db.Conn(ctx, r.db), userID, from, to))
+}
+
+// inPeriod keeps the user's rows dated from from to to; a zero to has no end.
+func inPeriod(q *gorm.DB, userID uuid.UUID, from, to calendar.Date) *gorm.DB {
+	q = q.Where("user_id = ? AND date >= ?", userID, from.Time())
+	if !to.IsZero() {
+		q = q.Where("date <= ?", to.Time())
+	}
+	return q
+}
+
+func (r *Repository) Lock(ctx context.Context, userID uuid.UUID) error {
+	err := db.Conn(ctx, r.db).Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "routine:"+userID.String()).Error
+	if err != nil {
+		return fmt.Errorf("routine: lock: %w", err)
+	}
+	return nil
 }
 
 func (r *Repository) ForTask(ctx context.Context, userID, taskID uuid.UUID) ([]domain.Adjustment, error) {

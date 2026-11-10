@@ -29,13 +29,14 @@ func Register(api huma.API, routine *app.Routine) {
 	huma.Register(api, huma.Operation{
 		OperationID: "adjust-occurrence", Method: http.MethodPut, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,
 		Summary:     "Ajusta uma ocorrência de uma tarefa fixa só neste dia",
-		Description: "Tira a ocorrência ou muda o horário dela, sem alterar a tarefa. Ajustar de novo substitui o ajuste anterior. Recorrentes e pontuais não têm ocorrências: use as sessões.",
-		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+		Description: "Tira a ocorrência ou muda o horário dela, sem alterar a tarefa. Ajustar de novo substitui o ajuste anterior. Recorrentes e pontuais não têm ocorrências: use as sessões. No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusConflict},
 	}, h.adjust)
 	huma.Register(api, huma.Operation{
 		OperationID: "reset-occurrence", Method: http.MethodDelete, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,
 		Summary: "Volta a ocorrência ao padrão da tarefa", DefaultStatus: http.StatusNoContent,
-		Errors: []int{http.StatusNotFound},
+		Description: "No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusNotFound, http.StatusConflict},
 	}, h.reset)
 	registerSessions(api, h)
 }

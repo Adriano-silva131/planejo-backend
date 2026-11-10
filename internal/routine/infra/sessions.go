@@ -86,8 +86,7 @@ func (r *SessionRepository) Delete(ctx context.Context, userID, taskID uuid.UUID
 
 func (r *SessionRepository) List(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]domain.Session, error) {
 	var models []sessionModel
-	err := db.Conn(ctx, r.db).
-		Where("user_id = ? AND date BETWEEN ? AND ?", userID, from.Time(), to.Time()).
+	err := inPeriod(db.Conn(ctx, r.db), userID, from, to).
 		Order("date, start_minute, task_id").
 		Find(&models).Error
 	if err != nil {

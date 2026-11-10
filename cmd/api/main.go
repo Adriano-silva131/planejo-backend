@@ -128,10 +128,12 @@ func registerRoutes(router httpx.Router, gdb *gorm.DB) {
 
 	routine := routineapp.NewRoutine(
 		routineTasks{tasks: tasks}, routineinfra.NewRepository(gdb), routineinfra.NewSessionRepository(gdb),
+		db.NewTransactor(gdb),
 	)
 	routinehttp.Register(router.Authenticated, routine)
 	tasks.OnScheduleChange(routineListener{routine: routine})
 	tasks.OnScheduleChange(progressListener{progress: progress})
+	tasks.OnScheduleCheck(routineChecker{routine: routine})
 }
 
 func newServer(port int, handler http.Handler) *http.Server {

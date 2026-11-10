@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -10,15 +11,19 @@ import (
 )
 
 // Routine builds the user's week from the fixed tasks, which one week may
-// move or skip, and the sessions the user places for the others.
+// move or skip, and the sessions the user places for the others. Changes that
+// take time are refused when they make more than domain.MaxLayers things
+// happen at once.
 type Routine struct {
 	tasks    domain.Tasks
 	repo     domain.Repository
 	sessions domain.Sessions
+	tx       Transactor
+	now      func() time.Time
 }
 
-func NewRoutine(tasks domain.Tasks, repo domain.Repository, sessions domain.Sessions) *Routine {
-	return &Routine{tasks: tasks, repo: repo, sessions: sessions}
+func NewRoutine(tasks domain.Tasks, repo domain.Repository, sessions domain.Sessions, tx Transactor) *Routine {
+	return &Routine{tasks: tasks, repo: repo, sessions: sessions, tx: tx, now: time.Now}
 }
 
 // Week builds the week that contains day. Adjustments start on the Sunday
@@ -54,7 +59,18 @@ func (r *Routine) Adjust(
 	if err != nil {
 		return domain.Adjustment{}, err
 	}
-	return r.repo.Save(ctx, a)
+	var saved domain.Adjustment
+	err = r.tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if saved, err = r.repo.Save(ctx, a); err != nil || saved.Skipped {
+			return err
+		}
+		return r.checkDates(ctx, userID, taskID, date, date.AddDays(1))
+	})
+	if err != nil {
+		return domain.Adjustment{}, err
+	}
+	return saved, nil
 }
 
 // ScheduleChanged drops what no longer applies after the task's schedule
@@ -83,7 +99,12 @@ func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID,
 
 // Reset brings the occurrence back to the task's pattern.
 func (r *Routine) Reset(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
-	return r.repo.Delete(ctx, userID, taskID, date)
+	return r.tx.InTx(ctx, func(ctx context.Context) error {
+		if err := r.repo.Delete(ctx, userID, taskID, date); err != nil {
+			return err
+		}
+		return r.checkDates(ctx, userID, taskID, date, date.AddDays(1))
+	})
 }
 
 // PlaceSession sets aside time for a recurring or one-off task on date,
@@ -99,7 +120,18 @@ func (r *Routine) PlaceSession(
 	if err != nil {
 		return domain.Session{}, err
 	}
-	return r.sessions.Save(ctx, s)
+	var saved domain.Session
+	err = r.tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if saved, err = r.sessions.Save(ctx, s); err != nil {
+			return err
+		}
+		return r.checkDates(ctx, userID, taskID, date)
+	})
+	if err != nil {
+		return domain.Session{}, err
+	}
+	return saved, nil
 }
 
 func (r *Routine) RemoveSession(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {

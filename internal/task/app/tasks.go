@@ -15,6 +15,13 @@ type ScheduleListener interface {
 	ScheduleChanged(ctx context.Context, userID uuid.UUID, before, after domain.Task) error
 }
 
+// ScheduleChecker is asked, inside the transaction of a creation or of a
+// schedule change, whether the task as saved fits the user's routine. An error
+// undoes the change.
+type ScheduleChecker interface {
+	CheckSchedule(ctx context.Context, userID uuid.UUID, task domain.Task) error
+}
+
 // Transactor runs fn in a transaction carried by ctx.
 type Transactor interface {
 	InTx(ctx context.Context, fn func(ctx context.Context) error) error
@@ -25,6 +32,7 @@ type Tasks struct {
 	repo      domain.Repository
 	tx        Transactor
 	listeners []ScheduleListener
+	checkers  []ScheduleChecker
 }
 
 func NewTasks(repo domain.Repository, tx Transactor) *Tasks {
@@ -36,12 +44,37 @@ func (s *Tasks) OnScheduleChange(l ScheduleListener) {
 	s.listeners = append(s.listeners, l)
 }
 
+// OnScheduleCheck registers c. It is not safe to call while serving requests.
+func (s *Tasks) OnScheduleCheck(c ScheduleChecker) {
+	s.checkers = append(s.checkers, c)
+}
+
 func (s *Tasks) Create(ctx context.Context, userID uuid.UUID, d domain.Details) (domain.Task, error) {
 	task, err := domain.New(userID, d)
 	if err != nil {
 		return domain.Task{}, err
 	}
-	return s.repo.Create(ctx, task)
+	var created domain.Task
+	err = s.tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if created, err = s.repo.Create(ctx, task); err != nil {
+			return err
+		}
+		return s.check(ctx, userID, created)
+	})
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return created, nil
+}
+
+func (s *Tasks) check(ctx context.Context, userID uuid.UUID, task domain.Task) error {
+	for _, c := range s.checkers {
+		if err := c.CheckSchedule(ctx, userID, task); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Tasks) Get(ctx context.Context, userID, id uuid.UUID) (domain.Task, error) {
@@ -76,7 +109,7 @@ func (s *Tasks) SetAreaColor(ctx context.Context, userID uuid.UUID, area, color 
 }
 
 // Update replaces the task's details. When its schedule changes, the
-// listeners are told in the same transaction.
+// listeners are told and then the checkers asked, in the same transaction.
 func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Details) (domain.Task, error) {
 	var updated domain.Task
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
@@ -99,7 +132,7 @@ func (s *Tasks) Update(ctx context.Context, userID, id uuid.UUID, d domain.Detai
 				return err
 			}
 		}
-		return nil
+		return s.check(ctx, userID, updated)
 	})
 	if err != nil {
 		return domain.Task{}, err

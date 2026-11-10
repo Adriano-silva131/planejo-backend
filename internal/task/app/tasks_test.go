@@ -192,6 +192,70 @@ func TestUpdateFailsWhenAListenerFails(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 }
 
+// checker records the tasks it is asked about, in order with listener calls
+// through log.
+type checker struct {
+	log *[]string
+	err error
+}
+
+func (c checker) CheckSchedule(_ context.Context, _ uuid.UUID, task domain.Task) error {
+	*c.log = append(*c.log, "check "+task.Title)
+	return c.err
+}
+
+type loggingListener struct {
+	log *[]string
+}
+
+func (l loggingListener) ScheduleChanged(_ context.Context, _ uuid.UUID, _, after domain.Task) error {
+	*l.log = append(*l.log, "changed "+after.Title)
+	return nil
+}
+
+func TestCreateAsksTheCheckers(t *testing.T) {
+	var log []string
+	tasks := NewTasks(newFakeRepo(), noTx{})
+	tasks.OnScheduleCheck(checker{log: &log})
+
+	_, err := tasks.Create(t.Context(), userID, gym(t))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"check Academia"}, log)
+}
+
+func TestCreateFailsWhenACheckerRefuses(t *testing.T) {
+	var log []string
+	errOverlap := errors.New("overlap")
+	tasks := NewTasks(newFakeRepo(), noTx{})
+	tasks.OnScheduleCheck(checker{log: &log, err: errOverlap})
+
+	_, err := tasks.Create(t.Context(), userID, gym(t))
+
+	assert.ErrorIs(t, err, errOverlap)
+}
+
+func TestUpdateAsksTheCheckersAfterTheListeners(t *testing.T) {
+	var log []string
+	tasks := NewTasks(newFakeRepo(), noTx{})
+	task, err := tasks.Create(t.Context(), userID, gym(t))
+	require.NoError(t, err)
+	tasks.OnScheduleChange(loggingListener{log: &log})
+	tasks.OnScheduleCheck(checker{log: &log})
+
+	renamed := gym(t)
+	renamed.Title = "Academia do bairro"
+	_, err = tasks.Update(t.Context(), userID, task.ID, renamed)
+	require.NoError(t, err)
+	assert.Empty(t, log, "the schedule did not change")
+
+	moved := gym(t)
+	moved.Schedule = domain.RecurringSchedule{TimesPerWeek: 1, Duration: time.Hour}
+	_, err = tasks.Update(t.Context(), userID, task.ID, moved)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"changed Academia", "check Academia"}, log)
+}
+
 func TestSetAreaColorSavesNormalizedColor(t *testing.T) {
 	repo := newFakeRepo()
 

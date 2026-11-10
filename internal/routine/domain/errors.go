@@ -19,6 +19,10 @@ var (
 	ErrSessionPastMidnight = invalid("session_past_midnight", "A sessão passa da meia-noite. Escolha um horário mais cedo.")
 )
 
+// ScheduleOverlapCode is the code of the error of a change that would make
+// more than MaxLayers things happen at once.
+const ScheduleOverlapCode = "schedule_overlap"
+
 func invalid(code, message string) error {
 	return domainerr.New(domainerr.Invalid, code, message)
 }

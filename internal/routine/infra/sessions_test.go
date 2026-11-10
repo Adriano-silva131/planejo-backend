@@ -106,3 +106,19 @@ func TestDatabaseRejectsSessionsPastMidnight(t *testing.T) {
 
 	assert.Error(t, f.tx.Create(&m).Error)
 }
+
+func TestListSessionsWithoutEnd(t *testing.T) {
+	f := newSessionFixture(t)
+	task := f.recurring(userA)
+	for _, date := range []calendar.Date{monday, monday.AddDays(1), monday.AddDays(400)} {
+		_, err := f.sessions.Save(t.Context(), session(userA, task, date, 7*60, 8*60))
+		require.NoError(t, err)
+	}
+
+	got, err := f.sessions.List(t.Context(), userA, monday.AddDays(1), calendar.Date{})
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, monday.AddDays(1), got[0].Date)
+	assert.Equal(t, monday.AddDays(400), got[1].Date)
+}
