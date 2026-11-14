@@ -83,9 +83,9 @@ func toPlannableTask(t taskdomain.Task) (routinedomain.PlannableTask, bool) {
 	p := routinedomain.PlannableTask{ID: t.ID, Title: t.Title, Area: t.Area}
 	switch s := t.Schedule.(type) {
 	case taskdomain.RecurringSchedule:
-		p.Kind, p.Duration = routinedomain.RecurringKind, s.Duration
+		p.Kind, p.Duration, p.Period = routinedomain.RecurringKind, s.Duration, s.Period
 	case taskdomain.OneOffSchedule:
-		p.Kind = routinedomain.OneOffKind
+		p.Kind, p.Period, p.Deadline = routinedomain.OneOffKind, s.Period, s.Deadline
 	default:
 		return routinedomain.PlannableTask{}, false
 	}

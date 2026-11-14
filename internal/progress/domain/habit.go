@@ -122,6 +122,24 @@ func (b habitBuilder) week(start calendar.Date) HabitWeek {
 	return w
 }
 
+// WeekSchedule is how a recurring task was set for one week: Target days,
+// as HabitWeek asks for, usually on Weekdays.
+type WeekSchedule struct {
+	Task     Task
+	Target   int
+	Weekdays calendar.Weekdays
+}
+
+// ScheduleIn returns how t was set for the week starting on start, or false
+// when it did not exist or was not recurring then.
+func (t Task) ScheduleIn(start calendar.Date) (WeekSchedule, bool) {
+	if t.Kind != RecurringTask || !t.activeIn(start) {
+		return WeekSchedule{}, false
+	}
+	r := t.recurrenceIn(start)
+	return WeekSchedule{Task: t, Target: t.target(start, r.TimesPerWeek), Weekdays: r.Weekdays}, true
+}
+
 // activeIn reports whether the task existed and was recurring in the week
 // starting on start.
 func (t Task) activeIn(start calendar.Date) bool {

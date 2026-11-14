@@ -24,7 +24,7 @@ func Register(api huma.API, routine *app.Routine) {
 	huma.Register(api, huma.Operation{
 		OperationID: "week-routine", Method: http.MethodGet, Path: "/routine", Tags: tags,
 		Summary:     "Rotina da semana",
-		Description: "Os blocos de cada dia: as tarefas fixas, com os ajustes desta semana, e as sessões com horário que o usuário encaixou para recorrentes e pontuais. Sessões só por período não viram bloco.",
+		Description: "Os blocos de cada dia: as tarefas fixas, com os ajustes desta semana, e as sessões com horário que o usuário encaixou para recorrentes e pontuais. Em plans, o que está no dia sem horário: sessões só por período, check-ins sem sessão e os dias de costume previstos de hoje em diante. Em toPlace, o que ainda não tem dia na semana. Hoje é o dia no fuso do cabeçalho Time-Zone, ou em UTC sem ele.",
 	}, h.week)
 	huma.Register(api, huma.Operation{
 		OperationID: "adjust-occurrence", Method: http.MethodPut, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,
@@ -42,7 +42,8 @@ func Register(api huma.API, routine *app.Routine) {
 }
 
 type weekInput struct {
-	Week string `query:"week" format:"date" required:"true" doc:"Qualquer dia da semana desejada" example:"2026-10-26"`
+	Week     string `query:"week" format:"date" required:"true" doc:"Qualquer dia da semana desejada" example:"2026-10-26"`
+	TimeZone string `header:"Time-Zone" doc:"Fuso do aparelho, no formato IANA; define qual é o dia de hoje. Sem ele, UTC" example:"America/Sao_Paulo"`
 }
 
 type weekOutput struct {
@@ -72,6 +73,12 @@ func (h handler) week(ctx context.Context, in *weekInput) (*weekOutput, error) {
 	day, err := calendar.ParseDate(in.Week)
 	if err != nil {
 		return nil, err
+	}
+	// The middleware already stored a valid zone in ctx; an invalid one is refused here.
+	if in.TimeZone != "" {
+		if _, err := httpx.ParseTimeZone(in.TimeZone); err != nil {
+			return nil, err
+		}
 	}
 	w, err := h.routine.Week(ctx, userID, day)
 	if err != nil {

@@ -11,23 +11,42 @@ import (
 )
 
 // Routine builds the user's week from the fixed tasks, which one week may
-// move or skip, and the sessions the user places for the others. Changes that
-// take time are refused when they make more than domain.MaxLayers things
-// happen at once.
+// move or skip, and the sessions the user places for the others, and plans
+// what has no time from the progress of the week. Changes that take time are
+// refused when they make more than domain.MaxLayers things happen at once.
 type Routine struct {
 	tasks    domain.Tasks
 	repo     domain.Repository
 	sessions domain.Sessions
+	progress domain.Progress
 	tx       Transactor
 	now      func() time.Time
 }
 
-func NewRoutine(tasks domain.Tasks, repo domain.Repository, sessions domain.Sessions, tx Transactor) *Routine {
-	return &Routine{tasks: tasks, repo: repo, sessions: sessions, tx: tx, now: time.Now}
+// Stores are where the routine reads and keeps its data.
+type Stores struct {
+	Tasks       domain.Tasks
+	Adjustments domain.Repository
+	Sessions    domain.Sessions
+	Progress    domain.Progress
 }
 
-// Week builds the week that contains day. Adjustments start on the Sunday
-// before, whose overnight occurrences end in this week.
+func NewRoutine(s Stores, tx Transactor) *Routine {
+	return &Routine{
+		tasks: s.Tasks, repo: s.Adjustments, sessions: s.Sessions, progress: s.Progress, tx: tx, now: time.Now,
+	}
+}
+
+// WithClock makes r read the current time from now, so tests can fix what
+// "today" is.
+func (r *Routine) WithClock(now func() time.Time) *Routine {
+	r.now = now
+	return r
+}
+
+// Week builds and plans the week that contains day, as seen today in the time
+// zone stored in ctx. Adjustments start on the Sunday before, whose overnight
+// occurrences end in this week.
 func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date) (domain.Week, error) {
 	monday := day.StartOfWeek()
 	from, to := monday.AddDays(-1), monday.AddDays(6)
@@ -43,7 +62,36 @@ func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date)
 	if err != nil {
 		return domain.Week{}, err
 	}
-	return domain.BuildWeek(day, fixed, adjustments, plannable, sessions), nil
+	progress, err := r.weekProgress(ctx, userID, monday, plannable)
+	if err != nil {
+		return domain.Week{}, err
+	}
+	w := domain.BuildWeek(day, fixed, adjustments, plannable, sessions)
+	w.Plan(calendar.DateOf(r.now().In(calendar.LocationFrom(ctx))), plannable, sessions, progress)
+	return w, nil
+}
+
+func (r *Routine) weekProgress(
+	ctx context.Context, userID uuid.UUID, monday calendar.Date, plannable []domain.PlannableTask,
+) (domain.WeekProgress, error) {
+	var p domain.WeekProgress
+	var err error
+	if p.Habits, err = r.progress.Habits(ctx, userID, monday); err != nil {
+		return p, err
+	}
+	if p.CheckIns, err = r.progress.CheckIns(ctx, userID, monday, monday.AddDays(6)); err != nil {
+		return p, err
+	}
+	var oneOffs []uuid.UUID
+	for _, t := range plannable {
+		if t.Kind == domain.OneOffKind {
+			oneOffs = append(oneOffs, t.ID)
+		}
+	}
+	if len(oneOffs) > 0 {
+		p.Completed, err = r.progress.Completed(ctx, userID, oneOffs)
+	}
+	return p, err
 }
 
 // Adjust changes the occurrence of the task starting on date, replacing an

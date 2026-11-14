@@ -130,7 +130,8 @@ func newRoutine(repo *fakeRepo) (*Routine, *fakeSessions) {
 func newRoutineWith(repo *fakeRepo) (*Routine, *fakeSessions, *fakeTasks) {
 	sessions := &fakeSessions{}
 	tasks := &fakeTasks{fixed: []domain.FixedTask{class}, plannable: []domain.PlannableTask{gym}}
-	return NewRoutine(tasks, repo, sessions, fakeTx{}), sessions, tasks
+	stores := Stores{Tasks: tasks, Adjustments: repo, Sessions: sessions, Progress: &fakeProgress{}}
+	return NewRoutine(stores, fakeTx{}), sessions, tasks
 }
 
 func TestWeekLoadsAdjustmentsFromTheSundayBeforeAndSessionsOfTheWeek(t *testing.T) {

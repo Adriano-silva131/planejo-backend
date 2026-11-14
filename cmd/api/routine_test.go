@@ -41,7 +41,7 @@ func TestToPlannableTask(t *testing.T) {
 	id := uuid.New()
 	run := taskdomain.Task{ID: id, Details: taskdomain.Details{
 		Title: "Corrida", Area: "Saúde", Priority: taskdomain.Medium,
-		Schedule: taskdomain.RecurringSchedule{TimesPerWeek: 2, Duration: 30 * time.Minute},
+		Schedule: taskdomain.RecurringSchedule{TimesPerWeek: 2, Duration: 30 * time.Minute, Period: calendar.Morning},
 	}}
 	report := taskdomain.Task{ID: id, Details: taskdomain.Details{
 		Title: "Relatório", Area: "Trabalho", Priority: taskdomain.Low,
@@ -60,7 +60,11 @@ func TestToPlannableTask(t *testing.T) {
 
 	assert.Equal(t, routinedomain.PlannableTask{
 		ID: id, Title: "Corrida", Area: "Saúde", Kind: routinedomain.RecurringKind, Duration: 30 * time.Minute,
+		Period: calendar.Morning,
 	}, recurring)
-	assert.Equal(t, routinedomain.PlannableTask{ID: id, Title: "Relatório", Area: "Trabalho", Kind: routinedomain.OneOffKind}, oneOff)
+	assert.Equal(t, routinedomain.PlannableTask{
+		ID: id, Title: "Relatório", Area: "Trabalho", Kind: routinedomain.OneOffKind,
+		Deadline: calendar.NewDate(2026, time.November, 5),
+	}, oneOff)
 	assert.False(t, fixed, "a fixed task has occurrences, not sessions")
 }

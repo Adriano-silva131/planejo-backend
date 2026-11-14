@@ -99,6 +99,49 @@ func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date
 func (p *Progress) Habits(
 	ctx context.Context, userID uuid.UUID, day calendar.Date, weeks int, loc *time.Location,
 ) ([]domain.Habit, error) {
+	tasks, err := p.habitTasks(ctx, userID, loc)
+	if err != nil {
+		return nil, err
+	}
+	today := calendar.DateOf(p.now().In(loc))
+	ids, from := habitScope(tasks)
+	if len(ids) == 0 {
+		return domain.BuildHabits(today, day, weeks, tasks, nil), nil
+	}
+	checkIns, err := p.repo.List(ctx, userID, domain.Filter{TaskIDs: ids, From: from, To: day.StartOfWeek().AddDays(6)})
+	if err != nil {
+		return nil, err
+	}
+	return domain.BuildHabits(today, day, weeks, tasks, checkIns), nil
+}
+
+// WeekSchedules returns how each recurring task was set for the week
+// starting on monday, leaving out those that were not recurring then. loc
+// tells the day each task was created.
+func (p *Progress) WeekSchedules(
+	ctx context.Context, userID uuid.UUID, monday calendar.Date, loc *time.Location,
+) ([]domain.WeekSchedule, error) {
+	tasks, err := p.habitTasks(ctx, userID, loc)
+	if err != nil {
+		return nil, err
+	}
+	var out []domain.WeekSchedule
+	for _, t := range tasks {
+		if s, ok := t.ScheduleIn(monday); ok {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+// CheckIns lists the user's check-ins within f.
+func (p *Progress) CheckIns(ctx context.Context, userID uuid.UUID, f domain.Filter) ([]domain.CheckIn, error) {
+	return p.repo.List(ctx, userID, f)
+}
+
+// habitTasks returns the user's tasks with how they repeated before, created
+// on days in loc.
+func (p *Progress) habitTasks(ctx context.Context, userID uuid.UUID, loc *time.Location) ([]domain.Task, error) {
 	tasks, err := p.tasks.List(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -114,16 +157,7 @@ func (p *Progress) Habits(
 		}
 		t.PastSchedules = schedules[t.ID]
 	}
-	today := calendar.DateOf(p.now().In(loc))
-	ids, from := habitScope(tasks)
-	if len(ids) == 0 {
-		return domain.BuildHabits(today, day, weeks, tasks, nil), nil
-	}
-	checkIns, err := p.repo.List(ctx, userID, domain.Filter{TaskIDs: ids, From: from, To: day.StartOfWeek().AddDays(6)})
-	if err != nil {
-		return nil, err
-	}
-	return domain.BuildHabits(today, day, weeks, tasks, checkIns), nil
+	return tasks, nil
 }
 
 // habitScope returns the recurring tasks and the Monday of the oldest one's
