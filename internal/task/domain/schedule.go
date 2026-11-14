@@ -18,15 +18,6 @@ const (
 	OneOff Kind = "one_off"
 )
 
-// Period is the part of the day the user prefers. Empty means no preference.
-type Period string
-
-const (
-	Morning   Period = "morning"
-	Afternoon Period = "afternoon"
-	Evening   Period = "evening"
-)
-
 const (
 	MinDuration        = 5 * time.Minute
 	MaxSessionDuration = 12 * time.Hour
@@ -67,13 +58,13 @@ func (s FixedSchedule) validate() error {
 const MaxTimesPerWeek = 7
 
 // RecurringSchedule is done TimesPerWeek times a week, on any days, taking
-// Duration each time. Weekdays are the days the user usually does it, a
-// preference that may be empty.
+// Duration each time. Weekdays are the days the user usually does it, and
+// Period the part of the day the user prefers; both may be empty.
 type RecurringSchedule struct {
 	TimesPerWeek int
 	Weekdays     calendar.Weekdays
 	Duration     time.Duration
-	Period       Period
+	Period       calendar.Period
 }
 
 func (RecurringSchedule) Kind() Kind { return Recurring }
@@ -88,10 +79,11 @@ func (s RecurringSchedule) validate() error {
 	return validatePeriod(s.Period)
 }
 
-// OneOffSchedule is done by the end of Deadline.
+// OneOffSchedule is done by the end of Deadline, preferably in Period, which
+// may be empty.
 type OneOffSchedule struct {
 	Deadline calendar.Date
-	Period   Period
+	Period   calendar.Period
 }
 
 func (OneOffSchedule) Kind() Kind { return OneOff }
@@ -103,10 +95,9 @@ func (s OneOffSchedule) validate() error {
 	return validatePeriod(s.Period)
 }
 
-func validatePeriod(p Period) error {
-	switch p {
-	case "", Morning, Afternoon, Evening:
-		return nil
+func validatePeriod(p calendar.Period) error {
+	if p != "" && !p.Valid() {
+		return ErrInvalidPeriod
 	}
-	return ErrInvalidPeriod
+	return nil
 }

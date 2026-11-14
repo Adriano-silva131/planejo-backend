@@ -59,7 +59,7 @@ type occurrenceKey struct {
 // BuildWeek builds the week that contains day. It starts on the Sunday
 // before, whose overnight occurrences end on Monday. Adjustments of dates
 // that are no longer occurrences are ignored, and so are sessions of tasks
-// not in plannable.
+// not in plannable and sessions without a time.
 func BuildWeek(
 	day calendar.Date, fixed []FixedTask, adjustments []Adjustment, plannable []PlannableTask, sessions []Session,
 ) Week {
@@ -136,14 +136,15 @@ func (w *Week) add(offset int, b Block) {
 	}
 }
 
-// placeSessions adds the sessions of this week as blocks of their tasks.
+// placeSessions adds the timed sessions of this week as blocks of their
+// tasks. A session only in a period has no time to take, so it is no block.
 func (w *Week) placeSessions(plannable []PlannableTask, sessions []Session) {
 	byID := make(map[uuid.UUID]PlannableTask, len(plannable))
 	for _, t := range plannable {
 		byID[t.ID] = t
 	}
 	for _, s := range sessions {
-		if t, ok := byID[s.TaskID]; ok {
+		if t, ok := byID[s.TaskID]; ok && s.Timed() {
 			w.add(s.Date.DaysSince(w.Start), Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: t.Kind, Start: s.Start, End: s.End})
 		}
 	}

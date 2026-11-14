@@ -110,7 +110,7 @@ func (f taskFields) schedule() (domain.Schedule, error) {
 		if err != nil {
 			return nil, err
 		}
-		return domain.OneOffSchedule{Deadline: deadline, Period: domain.Period(f.Period)}, nil
+		return domain.OneOffSchedule{Deadline: deadline, Period: calendar.Period(f.Period)}, nil
 	}
 	return nil, domain.ErrScheduleRequired
 }
@@ -124,7 +124,7 @@ func (f taskFields) recurringSchedule() (domain.Schedule, error) {
 		TimesPerWeek: f.TimesPerWeek,
 		Weekdays:     days,
 		Duration:     time.Duration(f.DurationMinutes) * time.Minute,
-		Period:       domain.Period(f.Period),
+		Period:       calendar.Period(f.Period),
 	}, nil
 }
 

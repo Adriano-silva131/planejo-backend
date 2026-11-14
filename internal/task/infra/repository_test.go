@@ -44,7 +44,7 @@ func details(t *testing.T) map[string]domain.Details {
 			Date: calendar.NewDate(2026, time.November, 5), Start: 15 * 60, End: 16 * 60,
 		}},
 		"recurring": {Title: "Academia", Area: "Saúde", Priority: domain.High, Schedule: domain.RecurringSchedule{
-			TimesPerWeek: 2, Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
+			TimesPerWeek: 2, Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: calendar.Morning,
 		}},
 		"recurring without usual days": {Title: "Corrida", Area: "Saúde", Priority: domain.Medium, Schedule: domain.RecurringSchedule{
 			TimesPerWeek: 3, Duration: 30 * time.Minute,
@@ -53,7 +53,7 @@ func details(t *testing.T) map[string]domain.Details {
 			TimesPerWeek: 1, Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
 		}},
 		"one-off": {Title: "Relatório", Area: "Trabalho", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
-			Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
+			Deadline: calendar.NewDate(2026, time.October, 30), Period: calendar.Afternoon,
 		}},
 	}
 }

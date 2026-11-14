@@ -203,13 +203,13 @@ func TestBuildWeekPlacesTheSessionsOfTheWeek(t *testing.T) {
 func TestNewSession(t *testing.T) {
 	gym, report := plannable()
 
-	byDuration, err := NewSession(userID, gym, day(5), Placement{Start: at(19)})
+	byDuration, err := NewSession(userID, gym, day(5), Placement{Start: calendar.SomeTime(at(19))})
 	require.NoError(t, err)
-	withEnd, err := NewSession(userID, gym, day(5), Placement{Start: at(19), End: calendar.SomeTime(at(19) + 30)})
+	withEnd, err := NewSession(userID, gym, day(5), Placement{Start: calendar.SomeTime(at(19)), End: calendar.SomeTime(at(19) + 30)})
 	require.NoError(t, err)
-	untilMidnight, err := NewSession(userID, report, day(1), Placement{Start: at(22), End: calendar.SomeTime(0)})
+	untilMidnight, err := NewSession(userID, report, day(1), Placement{Start: calendar.SomeTime(at(22)), End: calendar.SomeTime(0)})
 	require.NoError(t, err)
-	lastHour, err := NewSession(userID, gym, day(1), Placement{Start: at(23)})
+	lastHour, err := NewSession(userID, gym, day(1), Placement{Start: calendar.SomeTime(at(23))})
 	require.NoError(t, err)
 
 	assert.Equal(t, Session{UserID: userID, TaskID: gym.ID, Date: day(5), Start: at(19), End: at(20)}, byDuration)
@@ -225,12 +225,12 @@ func TestNewSessionRejects(t *testing.T) {
 		placement Placement
 		want      error
 	}{
-		"one-off without end":    {report, Placement{Start: at(9)}, ErrSessionEndRequired},
-		"duration past midnight": {gym, Placement{Start: at(23) + 30}, ErrSessionPastMidnight},
-		"end before start":       {report, Placement{Start: at(22), End: calendar.SomeTime(at(1))}, ErrSessionPastMidnight},
-		"same start and end":     {report, Placement{Start: at(9), End: calendar.SomeTime(at(9))}, ErrInvalidTimeRange},
-		"start out of range":     {gym, Placement{Start: EndOfDay}, calendar.ErrInvalidTime},
-		"end out of range":       {report, Placement{Start: at(9), End: calendar.SomeTime(EndOfDay)}, calendar.ErrInvalidTime},
+		"one-off without end":    {report, Placement{Start: calendar.SomeTime(at(9))}, ErrSessionEndRequired},
+		"duration past midnight": {gym, Placement{Start: calendar.SomeTime(at(23) + 30)}, ErrSessionPastMidnight},
+		"end before start":       {report, Placement{Start: calendar.SomeTime(at(22)), End: calendar.SomeTime(at(1))}, ErrSessionPastMidnight},
+		"same start and end":     {report, Placement{Start: calendar.SomeTime(at(9)), End: calendar.SomeTime(at(9))}, ErrInvalidTimeRange},
+		"start out of range":     {gym, Placement{Start: calendar.SomeTime(EndOfDay)}, calendar.ErrInvalidTime},
+		"end out of range":       {report, Placement{Start: calendar.SomeTime(at(9)), End: calendar.SomeTime(EndOfDay)}, calendar.ErrInvalidTime},
 	}
 
 	for name, tc := range cases {
