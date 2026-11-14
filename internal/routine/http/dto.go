@@ -94,10 +94,11 @@ type blockBody struct {
 }
 
 type dayBody struct {
-	Date    string      `json:"date" format:"date"`
-	Weekday string      `json:"weekday" example:"monday"`
-	Blocks  []blockBody `json:"blocks" doc:"Em ordem de início"`
-	Plans   []planBody  `json:"plans" doc:"Recorrentes e pontuais no dia sem horário, em ordem de período (manhã, tarde, noite, sem período) e título"`
+	Date           string        `json:"date" format:"date"`
+	Weekday        string        `json:"weekday" example:"monday"`
+	Blocks         []blockBody   `json:"blocks" doc:"Em ordem de início"`
+	PeriodSessions []sessionBody `json:"periodSessions" doc:"Sessões só por período, sem ocupar horário"`
+	Plans          []planBody    `json:"plans" doc:"Recorrentes e pontuais no dia sem horário, em ordem de período (manhã, tarde, noite, sem período) e título"`
 }
 
 type routineWeekBody struct {
@@ -123,10 +124,11 @@ func toWeekBody(w domain.Week) routineWeekBody {
 
 func toDayBody(d domain.Day) dayBody {
 	day := dayBody{
-		Date:    d.Date.String(),
-		Weekday: calendar.WeekdayName(d.Date.Weekday()),
-		Blocks:  make([]blockBody, 0, len(d.Blocks)),
-		Plans:   make([]planBody, 0, len(d.Plans)),
+		Date:           d.Date.String(),
+		Weekday:        calendar.WeekdayName(d.Date.Weekday()),
+		Blocks:         make([]blockBody, 0, len(d.Blocks)),
+		Plans:          make([]planBody, 0, len(d.Plans)),
+		PeriodSessions: make([]sessionBody, 0, len(d.PeriodSessions)),
 	}
 	for _, bl := range d.Blocks {
 		day.Blocks = append(day.Blocks, blockBody{
@@ -141,6 +143,9 @@ func toDayBody(d domain.Day) dayBody {
 			ContinuesFromPreviousDay: bl.ContinuesFromPreviousDay,
 			ContinuesNextDay:         bl.ContinuesNextDay,
 		})
+	}
+	for _, s := range d.PeriodSessions {
+		day.PeriodSessions = append(day.PeriodSessions, toSessionBody(s))
 	}
 	for _, p := range d.Plans {
 		day.Plans = append(day.Plans, planBody{

@@ -80,3 +80,39 @@ func TestPlaceSessionRejectsAnUnknownPeriod(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Contains(t, errorOf(t, rec)["fields"], "period")
 }
+
+func TestPeriodSessionCanBeReadAfterPlacement(t *testing.T) {
+	srv := newServer(t)
+	taskID := srv.addPlannable(userA, gym())
+	path := "/v1/tasks/" + taskID + "/sessions/2026-10-28"
+
+	periods := func(token, week string, day int) []any {
+		t.Helper()
+		rec := srv.do(http.MethodGet, "/v1/routine?week="+week, token, "")
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		days := decode(t, rec)["days"].([]any)
+		return days[day].(map[string]any)["periodSessions"].([]any)
+	}
+
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, path, "token-a", `{"start":"07:00"}`).Code)
+	assert.Empty(t, periods("token-a", "2026-10-28", 2))
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, path, "token-a", `{"period":"evening"}`).Code)
+
+	sessions := periods("token-a", "2026-10-28", 2)
+	require.Len(t, sessions, 1)
+	session := sessions[0].(map[string]any)
+	assert.Equal(t, taskID, session["taskId"])
+	assert.Equal(t, "2026-10-28", session["date"])
+	assert.Equal(t, "evening", session["period"])
+	assert.NotContains(t, session, "start")
+	assert.NotContains(t, session, "end")
+	assert.Empty(t, periods("token-a", "2026-10-28", 1))
+	assert.Empty(t, periods("token-a", "2026-11-04", 2))
+	assert.Empty(t, periods("token-b", "2026-10-28", 2))
+
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, path, "token-a", `{"start":"19:00"}`).Code)
+	assert.Empty(t, periods("token-a", "2026-10-28", 2))
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, path, "token-a", `{"period":"morning"}`).Code)
+	require.Equal(t, http.StatusNoContent, srv.do(http.MethodDelete, path, "token-a", "").Code)
+	assert.Empty(t, periods("token-a", "2026-10-28", 2))
+}
