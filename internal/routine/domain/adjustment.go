@@ -56,8 +56,12 @@ type Repository interface {
 	// deleted meanwhile.
 	Save(ctx context.Context, a Adjustment) (Adjustment, error)
 	Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error
-	// List returns the adjustments of occurrences starting from from to to.
+	// List returns the adjustments of occurrences starting from from to to; a
+	// zero to has no end.
 	List(ctx context.Context, userID uuid.UUID, from, to calendar.Date) ([]Adjustment, error)
 	// ForTask returns every adjustment of the task.
 	ForTask(ctx context.Context, userID, taskID uuid.UUID) ([]Adjustment, error)
+	// Lock makes other changes to the user's routine wait until the
+	// transaction in ctx ends.
+	Lock(ctx context.Context, userID uuid.UUID) error
 }

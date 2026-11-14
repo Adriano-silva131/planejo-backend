@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -9,15 +10,20 @@ import (
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 )
 
-// Routine builds the user's week from the fixed tasks and lets one week
-// differ from the pattern.
+// Routine builds the user's week from the fixed tasks, which one week may
+// move or skip, and the sessions the user places for the others. Changes that
+// take time are refused when they make more than domain.MaxLayers things
+// happen at once.
 type Routine struct {
-	tasks domain.Tasks
-	repo  domain.Repository
+	tasks    domain.Tasks
+	repo     domain.Repository
+	sessions domain.Sessions
+	tx       Transactor
+	now      func() time.Time
 }
 
-func NewRoutine(tasks domain.Tasks, repo domain.Repository) *Routine {
-	return &Routine{tasks: tasks, repo: repo}
+func NewRoutine(tasks domain.Tasks, repo domain.Repository, sessions domain.Sessions, tx Transactor) *Routine {
+	return &Routine{tasks: tasks, repo: repo, sessions: sessions, tx: tx, now: time.Now}
 }
 
 // Week builds the week that contains day. Adjustments start on the Sunday
@@ -25,7 +31,7 @@ func NewRoutine(tasks domain.Tasks, repo domain.Repository) *Routine {
 func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date) (domain.Week, error) {
 	monday := day.StartOfWeek()
 	from, to := monday.AddDays(-1), monday.AddDays(6)
-	tasks, err := r.tasks.Fixed(ctx, userID, from, to)
+	fixed, plannable, err := r.tasks.List(ctx, userID)
 	if err != nil {
 		return domain.Week{}, err
 	}
@@ -33,7 +39,11 @@ func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date)
 	if err != nil {
 		return domain.Week{}, err
 	}
-	return domain.BuildWeek(day, tasks, adjustments), nil
+	sessions, err := r.sessions.List(ctx, userID, monday, to)
+	if err != nil {
+		return domain.Week{}, err
+	}
+	return domain.BuildWeek(day, fixed, adjustments, plannable, sessions), nil
 }
 
 // Adjust changes the occurrence of the task starting on date, replacing an
@@ -41,7 +51,7 @@ func (r *Routine) Week(ctx context.Context, userID uuid.UUID, day calendar.Date)
 func (r *Routine) Adjust(
 	ctx context.Context, userID, taskID uuid.UUID, date calendar.Date, c domain.Change,
 ) (domain.Adjustment, error) {
-	task, err := r.tasks.Get(ctx, userID, taskID)
+	task, err := r.tasks.GetFixed(ctx, userID, taskID)
 	if err != nil {
 		return domain.Adjustment{}, err
 	}
@@ -49,19 +59,36 @@ func (r *Routine) Adjust(
 	if err != nil {
 		return domain.Adjustment{}, err
 	}
-	return r.repo.Save(ctx, a)
+	var saved domain.Adjustment
+	err = r.tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if saved, err = r.repo.Save(ctx, a); err != nil || saved.Skipped {
+			return err
+		}
+		return r.checkDates(ctx, userID, taskID, date, date.AddDays(1))
+	})
+	if err != nil {
+		return domain.Adjustment{}, err
+	}
+	return saved, nil
 }
 
-// ScheduleChanged drops the adjustments that no longer apply after the task's
-// schedule changed: all of them when task is nil, as it is no longer fixed,
-// and those of dates that are no longer occurrences otherwise.
-func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, task *domain.FixedTask) error {
+// ScheduleChanged drops what no longer applies after the task's schedule
+// changed. fixed is the task when it is fixed now: its sessions go, and so do
+// the adjustments of dates that are no longer occurrences. Otherwise every
+// adjustment goes, as the task has no occurrences anymore.
+func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, fixed *domain.FixedTask) error {
+	if fixed != nil {
+		if err := r.sessions.DeleteForTask(ctx, userID, taskID); err != nil {
+			return err
+		}
+	}
 	adjustments, err := r.repo.ForTask(ctx, userID, taskID)
 	if err != nil {
 		return err
 	}
 	for _, a := range adjustments {
-		if task == nil || !task.OccursOn(a.Date) {
+		if fixed == nil || !fixed.OccursOn(a.Date) {
 			if err := r.repo.Delete(ctx, userID, taskID, a.Date); err != nil {
 				return err
 			}
@@ -72,5 +99,41 @@ func (r *Routine) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID,
 
 // Reset brings the occurrence back to the task's pattern.
 func (r *Routine) Reset(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
-	return r.repo.Delete(ctx, userID, taskID, date)
+	return r.tx.InTx(ctx, func(ctx context.Context) error {
+		if err := r.repo.Delete(ctx, userID, taskID, date); err != nil {
+			return err
+		}
+		return r.checkDates(ctx, userID, taskID, date, date.AddDays(1))
+	})
+}
+
+// PlaceSession sets aside time for a recurring or one-off task on date,
+// replacing the session the task had that day.
+func (r *Routine) PlaceSession(
+	ctx context.Context, userID, taskID uuid.UUID, date calendar.Date, p domain.Placement,
+) (domain.Session, error) {
+	task, err := r.tasks.GetPlannable(ctx, userID, taskID)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	s, err := domain.NewSession(userID, task, date, p)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	var saved domain.Session
+	err = r.tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		if saved, err = r.sessions.Save(ctx, s); err != nil {
+			return err
+		}
+		return r.checkDates(ctx, userID, taskID, date)
+	})
+	if err != nil {
+		return domain.Session{}, err
+	}
+	return saved, nil
+}
+
+func (r *Routine) RemoveSession(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
+	return r.sessions.Delete(ctx, userID, taskID, date)
 }

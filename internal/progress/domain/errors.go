@@ -11,8 +11,7 @@ var (
 var (
 	ErrFixedTaskCheckIn = invalid("fixed_task_checkin", "Tarefas fixas não precisam de registro: elas sempre acontecem.")
 	ErrFutureCheckIn    = invalid("future_checkin", "Não dá para registrar um dia que ainda não chegou.")
-	ErrOneOffOnly       = invalid("checkin_one_off_only", "Tempo e conclusão só valem para tarefas pontuais.")
-	ErrInvalidMinutes   = invalid("checkin_invalid_minutes", "O tempo do dia precisa ficar entre 0 e 1440 minutos.")
+	ErrAlreadyCompleted = invalid("one_off_already_completed", "Esta tarefa já foi concluída. Reabra para mudar o dia.")
 )
 
 func invalid(code, message string) error {

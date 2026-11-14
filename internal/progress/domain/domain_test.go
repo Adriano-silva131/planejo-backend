@@ -18,7 +18,7 @@ var (
 
 	gym    = Task{ID: uuid.New(), Title: "Academia", Kind: RecurringTask, TimesPerWeek: 3}
 	work   = Task{ID: uuid.New(), Title: "Trabalho", Kind: FixedTask}
-	thesis = Task{ID: uuid.New(), Title: "TCC", Kind: OneOffTask, TotalMinutes: 1200, Deadline: monday.AddDays(40)}
+	thesis = Task{ID: uuid.New(), Title: "TCC", Kind: OneOffTask, Deadline: monday.AddDays(40)}
 )
 
 func day(n int) calendar.Date {
@@ -26,16 +26,35 @@ func day(n int) calendar.Date {
 }
 
 func TestNewCheckIn(t *testing.T) {
-	c, err := NewCheckIn(userID, thesis, Entry{Date: day(1), Minutes: 90}, day(3))
+	c, err := NewCheckIn(userID, thesis, Entry{Date: day(1)}, day(3), nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, CheckIn{UserID: userID, TaskID: thesis.ID, Date: day(1), Minutes: 90}, c)
+	assert.Equal(t, CheckIn{UserID: userID, TaskID: thesis.ID, Date: day(1)}, c)
+}
+
+func TestNewCheckInKeepsTheStart(t *testing.T) {
+	c, err := NewCheckIn(userID, gym, Entry{Date: day(1), Start: calendar.SomeTime(7 * 60)}, day(2), nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, calendar.SomeTime(7*60), c.Start)
 }
 
 func TestNewCheckInAcceptsToday(t *testing.T) {
-	_, err := NewCheckIn(userID, gym, Entry{Date: day(2)}, day(2))
+	_, err := NewCheckIn(userID, gym, Entry{Date: day(2)}, day(2), nil)
 
 	assert.NoError(t, err)
+}
+
+func TestNewCheckInCompletesOneOffOnce(t *testing.T) {
+	completed := []CheckIn{checkIn(thesis, day(1))}
+
+	_, sameDay := NewCheckIn(userID, thesis, Entry{Date: day(1), Start: calendar.SomeTime(9 * 60)}, day(2), completed)
+	_, otherDay := NewCheckIn(userID, thesis, Entry{Date: day(2)}, day(2), completed)
+	_, recurring := NewCheckIn(userID, gym, Entry{Date: day(2)}, day(2), []CheckIn{checkIn(gym, day(1))})
+
+	assert.NoError(t, sameDay, "the same day can be reported again")
+	assert.ErrorIs(t, otherDay, ErrAlreadyCompleted)
+	assert.NoError(t, recurring, "recurring tasks are done many times")
 }
 
 func TestNewCheckInRejects(t *testing.T) {
@@ -44,36 +63,33 @@ func TestNewCheckInRejects(t *testing.T) {
 		entry Entry
 		want  error
 	}{
-		"fixed task":           {work, Entry{Date: day(1)}, ErrFixedTaskCheckIn},
-		"no date":              {gym, Entry{}, calendar.ErrInvalidDate},
-		"future day":           {gym, Entry{Date: day(3)}, ErrFutureCheckIn},
-		"minutes on recurring": {gym, Entry{Date: day(1), Minutes: 30}, ErrOneOffOnly},
-		"completed recurring":  {gym, Entry{Date: day(1), Completed: true}, ErrOneOffOnly},
-		"negative minutes":     {thesis, Entry{Date: day(1), Minutes: -1}, ErrInvalidMinutes},
-		"more than a day":      {thesis, Entry{Date: day(1), Minutes: MaxMinutesPerDay + 1}, ErrInvalidMinutes},
+		"fixed task":    {work, Entry{Date: day(1)}, ErrFixedTaskCheckIn},
+		"no date":       {gym, Entry{}, calendar.ErrInvalidDate},
+		"future day":    {gym, Entry{Date: day(3)}, ErrFutureCheckIn},
+		"invalid start": {gym, Entry{Date: day(1), Start: calendar.SomeTime(24 * 60)}, calendar.ErrInvalidTime},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := NewCheckIn(userID, tc.task, tc.entry, day(2))
+			_, err := NewCheckIn(userID, tc.task, tc.entry, day(2), nil)
 
 			assert.ErrorIs(t, err, tc.want)
 		})
 	}
 }
 
-func checkIn(task Task, date calendar.Date, minutes int, completed bool) CheckIn {
-	return CheckIn{UserID: userID, TaskID: task.ID, Date: date, Minutes: minutes, Completed: completed}
+func checkIn(task Task, date calendar.Date) CheckIn {
+	return CheckIn{UserID: userID, TaskID: task.ID, Date: date}
 }
 
 func TestSummarizeCountsRecurringDaysInTheWeek(t *testing.T) {
 	// Set for Monday, Wednesday and Friday; Monday was swapped for Tuesday.
 	checkIns := []CheckIn{
-		checkIn(gym, day(-1), 0, false),
-		checkIn(gym, day(1), 0, false),
-		checkIn(gym, day(2), 0, false),
-		checkIn(gym, day(4), 0, false),
-		checkIn(gym, day(7), 0, false),
+		checkIn(gym, day(-1)),
+		checkIn(gym, day(1)),
+		checkIn(gym, day(2)),
+		checkIn(gym, day(4)),
+		checkIn(gym, day(7)),
 	}
 
 	s := Summarize(day(3), []Task{gym, work}, checkIns)
@@ -84,21 +100,14 @@ func TestSummarizeCountsRecurringDaysInTheWeek(t *testing.T) {
 	assert.Empty(t, s.OneOff, "fixed tasks are left out")
 }
 
-func TestSummarizeAddsOneOffMinutes(t *testing.T) {
-	checkIns := []CheckIn{
-		checkIn(thesis, day(-3), 120, false),
-		checkIn(thesis, day(1), 90, false),
-		checkIn(thesis, day(5), 60, false),
-		checkIn(thesis, day(8), 300, false),
-	}
+func TestSummarizeShowsOpenOneOff(t *testing.T) {
+	s := Summarize(monday, []Task{thesis}, nil)
 
-	s := Summarize(monday, []Task{thesis}, checkIns)
-
-	assert.Equal(t, []OneOffProgress{{Task: thesis, WeekMinutes: 150, DoneMinutes: 270}}, s.OneOff)
+	assert.Equal(t, []OneOffProgress{{Task: thesis}}, s.OneOff)
 }
 
 func TestSummarizeShowsOneOffUntilTheWeekItIsCompleted(t *testing.T) {
-	checkIns := []CheckIn{checkIn(thesis, day(2), 60, true)}
+	checkIns := []CheckIn{checkIn(thesis, day(2))}
 
 	completedThisWeek := Summarize(monday, []Task{thesis}, checkIns)
 	nextWeek := Summarize(day(7), []Task{thesis}, checkIns)

@@ -34,9 +34,10 @@ func gym(t *testing.T) Details {
 		Area:     "Saúde",
 		Priority: High,
 		Schedule: RecurringSchedule{
-			Weekdays: weekdays(t, time.Monday, time.Wednesday, time.Friday),
-			Duration: time.Hour,
-			Period:   Morning,
+			TimesPerWeek: 3,
+			Weekdays:     weekdays(t, time.Monday, time.Wednesday, time.Friday),
+			Duration:     time.Hour,
+			Period:       Morning,
 		},
 	}
 }
@@ -59,7 +60,7 @@ func report() Details {
 		Title:    "Entregar relatório",
 		Area:     "Trabalho",
 		Priority: Medium,
-		Schedule: OneOffSchedule{Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)},
+		Schedule: OneOffSchedule{Deadline: calendar.NewDate(2026, time.October, 30)},
 	}
 }
 
@@ -113,14 +114,12 @@ func TestNewRejectsInvalidDetails(t *testing.T) {
 		"no schedule":         {func(d *Details) { d.Schedule = nil }, ErrScheduleRequired},
 		"no priority":         {func(d *Details) { d.Priority = "" }, ErrPriorityRequired},
 		"unknown priority":    {func(d *Details) { d.Priority = "urgent" }, ErrInvalidPriority},
-		"no weekdays":         {func(d *Details) { d.Schedule = RecurringSchedule{Duration: time.Hour} }, ErrWeekdaysRequired},
-		"short session":       {setRecurringDuration(t, time.Minute), ErrInvalidSessionDuration},
-		"long session":        {setRecurringDuration(t, 13*time.Hour), ErrInvalidSessionDuration},
-		"unknown period":      {setRecurringPeriod(t, "dawn"), ErrInvalidPeriod},
-		"one-off no deadline": {func(d *Details) { d.Schedule = OneOffSchedule{Duration: time.Hour} }, ErrDeadlineRequired},
-		"one-off too long": {func(d *Details) {
-			d.Schedule = OneOffSchedule{Duration: 101 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30)}
-		}, ErrInvalidTotalDuration},
+		"no times per week":   {setTimesPerWeek(0), ErrInvalidTimesPerWeek},
+		"over once a day":     {setTimesPerWeek(MaxTimesPerWeek + 1), ErrInvalidTimesPerWeek},
+		"short session":       {setRecurringDuration(time.Minute), ErrInvalidSessionDuration},
+		"long session":        {setRecurringDuration(13 * time.Hour), ErrInvalidSessionDuration},
+		"unknown period":      {setRecurringPeriod("dawn"), ErrInvalidPeriod},
+		"one-off no deadline": {func(d *Details) { d.Schedule = OneOffSchedule{} }, ErrDeadlineRequired},
 	}
 
 	for name, tc := range cases {
@@ -135,16 +134,32 @@ func TestNewRejectsInvalidDetails(t *testing.T) {
 	}
 }
 
-func setRecurringDuration(t *testing.T, duration time.Duration) func(*Details) {
+func setTimesPerWeek(n int) func(*Details) {
 	return func(d *Details) {
-		d.Schedule = RecurringSchedule{Weekdays: weekdays(t, time.Monday), Duration: duration}
+		d.Schedule = RecurringSchedule{TimesPerWeek: n, Duration: time.Hour}
 	}
 }
 
-func setRecurringPeriod(t *testing.T, period Period) func(*Details) {
+func setRecurringDuration(duration time.Duration) func(*Details) {
 	return func(d *Details) {
-		d.Schedule = RecurringSchedule{Weekdays: weekdays(t, time.Monday), Duration: time.Hour, Period: period}
+		d.Schedule = RecurringSchedule{TimesPerWeek: 1, Duration: duration}
 	}
+}
+
+func setRecurringPeriod(period Period) func(*Details) {
+	return func(d *Details) {
+		d.Schedule = RecurringSchedule{TimesPerWeek: 1, Duration: time.Hour, Period: period}
+	}
+}
+
+func TestNewAcceptsRecurringTaskWithoutUsualDays(t *testing.T) {
+	d := gym(t)
+	d.Schedule = RecurringSchedule{TimesPerWeek: 2, Duration: time.Hour}
+
+	task, err := New(testUserID, d)
+
+	require.NoError(t, err)
+	assert.True(t, task.Schedule.(RecurringSchedule).Weekdays.IsEmpty())
 }
 
 func TestNewAcceptsFixedTaskEndingTheNextDay(t *testing.T) {

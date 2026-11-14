@@ -44,13 +44,16 @@ func details(t *testing.T) map[string]domain.Details {
 			Date: calendar.NewDate(2026, time.November, 5), Start: 15 * 60, End: 16 * 60,
 		}},
 		"recurring": {Title: "Academia", Area: "Saúde", Priority: domain.High, Schedule: domain.RecurringSchedule{
-			Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
+			TimesPerWeek: 2, Weekdays: weekdays(t, time.Monday, time.Wednesday), Duration: time.Hour, Period: domain.Morning,
+		}},
+		"recurring without usual days": {Title: "Corrida", Area: "Saúde", Priority: domain.Medium, Schedule: domain.RecurringSchedule{
+			TimesPerWeek: 3, Duration: 30 * time.Minute,
 		}},
 		"recurring without period": {Title: "Leitura", Area: "Pessoal", Priority: domain.Low, Schedule: domain.RecurringSchedule{
-			Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
+			TimesPerWeek: 1, Weekdays: weekdays(t, time.Sunday), Duration: 30 * time.Minute,
 		}},
 		"one-off": {Title: "Relatório", Area: "Trabalho", Priority: domain.Medium, Schedule: domain.OneOffSchedule{
-			Duration: 3 * time.Hour, Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
+			Deadline: calendar.NewDate(2026, time.October, 30), Period: domain.Afternoon,
 		}},
 	}
 }
@@ -172,6 +175,26 @@ func TestDatabaseRejectsInconsistentRows(t *testing.T) {
 	assert.ErrorContains(t, err, "tasks_fixed_shape")
 }
 
+func TestDatabaseRejectsTimesPerWeekOutsideRecurringTasks(t *testing.T) {
+	tx := dbtest.Tx(t)
+	m := toModel(domain.Task{ID: uuid.New(), UserID: userA, Details: details(t)["one-off"]})
+	m.TimesPerWeek = new(2)
+
+	err := tx.Create(&m).Error
+
+	assert.ErrorContains(t, err, "tasks_times_per_week_recurring")
+}
+
+func TestDatabaseRequiresTimesPerWeekOnRecurringTasks(t *testing.T) {
+	tx := dbtest.Tx(t)
+	m := toModel(domain.Task{ID: uuid.New(), UserID: userA, Details: details(t)["recurring"]})
+	m.TimesPerWeek = nil
+
+	err := tx.Create(&m).Error
+
+	assert.ErrorContains(t, err, "tasks_recurring_shape")
+}
+
 func TestAllReturnsEveryTaskOfTheUser(t *testing.T) {
 	repo := newRepo(t)
 	d := details(t)
@@ -230,21 +253,4 @@ func TestDatabaseAcceptsFixedTaskEndingTheNextDay(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, sleep, got.Details)
-}
-
-func TestFixedReturnsWhatMayOccurInThePeriod(t *testing.T) {
-	repo := newRepo(t)
-	d := details(t)
-	weekly := create(t, repo, userA, d["fixed weekly"])
-	onDate := create(t, repo, userA, d["fixed on date"]) // 2026-11-05
-	create(t, repo, userA, d["recurring"])
-	create(t, repo, userB, d["fixed weekly"])
-
-	inPeriod, err := repo.Fixed(t.Context(), userA, calendar.NewDate(2026, time.November, 1), calendar.NewDate(2026, time.November, 8))
-	require.NoError(t, err)
-	before, err := repo.Fixed(t.Context(), userA, calendar.NewDate(2026, time.October, 25), calendar.NewDate(2026, time.November, 1))
-	require.NoError(t, err)
-
-	assert.ElementsMatch(t, []uuid.UUID{weekly.ID, onDate.ID}, ids(inPeriod))
-	assert.Equal(t, []uuid.UUID{weekly.ID}, ids(before))
 }

@@ -26,7 +26,7 @@ func Register(api huma.API, progress *app.Progress) {
 	huma.Register(api, huma.Operation{
 		OperationID: "check-in", Method: http.MethodPut, Path: "/tasks/{id}/checkins/{date}", Tags: tags,
 		Summary:     "Marca a tarefa como feita no dia",
-		Description: "Recorrentes: sem corpo. Pontuais: minutos do dia e, se for o caso, a conclusão. Registrar de novo o mesmo dia substitui o anterior.",
+		Description: "Na recorrente, marca o dia como feito; na pontual, conclui a tarefa nesse dia, e para mudar o dia é preciso desfazer antes. O corpo é opcional. Registrar de novo o mesmo dia substitui o anterior.",
 		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity},
 	}, h.checkIn)
 	huma.Register(api, huma.Operation{
@@ -97,7 +97,9 @@ func (h handler) checkIn(ctx context.Context, in *checkInInput) (*checkInOutput,
 	}
 	e := domain.Entry{Date: d.date}
 	if in.Body != nil {
-		e.Minutes, e.Completed = in.Body.Minutes, in.Body.Completed
+		if e.Start, err = calendar.ParseOptionalTimeOfDay(in.Body.Start); err != nil {
+			return nil, err
+		}
 	}
 	c, err := h.progress.CheckIn(ctx, d.userID, d.taskID, e, loc)
 	if err != nil {

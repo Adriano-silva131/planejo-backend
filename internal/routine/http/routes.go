@@ -24,19 +24,21 @@ func Register(api huma.API, routine *app.Routine) {
 	huma.Register(api, huma.Operation{
 		OperationID: "week-routine", Method: http.MethodGet, Path: "/routine", Tags: tags,
 		Summary:     "Rotina da semana",
-		Description: "Os blocos de cada dia, montados a partir das tarefas fixas e dos ajustes desta semana.",
+		Description: "Os blocos de cada dia: as tarefas fixas, com os ajustes desta semana, e as sessões que o usuário encaixou para recorrentes e pontuais.",
 	}, h.week)
 	huma.Register(api, huma.Operation{
 		OperationID: "adjust-occurrence", Method: http.MethodPut, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,
-		Summary:     "Ajusta uma ocorrência de uma tarefa fixa só nesta semana",
-		Description: "Tira a ocorrência ou muda o horário dela, sem alterar a tarefa. Ajustar de novo substitui o ajuste anterior.",
-		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+		Summary:     "Ajusta uma ocorrência de uma tarefa fixa só neste dia",
+		Description: "Tira a ocorrência ou muda o horário dela, sem alterar a tarefa. Ajustar de novo substitui o ajuste anterior. Recorrentes e pontuais não têm ocorrências: use as sessões. No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusConflict},
 	}, h.adjust)
 	huma.Register(api, huma.Operation{
 		OperationID: "reset-occurrence", Method: http.MethodDelete, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,
 		Summary: "Volta a ocorrência ao padrão da tarefa", DefaultStatus: http.StatusNoContent,
-		Errors: []int{http.StatusNotFound},
+		Description: "No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusNotFound, http.StatusConflict},
 	}, h.reset)
+	registerSessions(api, h)
 }
 
 type weekInput struct {

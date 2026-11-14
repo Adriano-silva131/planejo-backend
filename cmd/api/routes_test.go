@@ -101,6 +101,51 @@ func TestChangingTheScheduleDropsAdjustmentsThatNoLongerApply(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, call(http.MethodDelete, occurrence, "").Code)
 }
 
+func TestChangingTheKindDropsAdjustments(t *testing.T) {
+	call := api(t)
+	const fixed = `{"title":"Inglês","area":"Estudos","kind":"fixed","weekdays":["monday"],"start":"19:00","end":"20:00"}`
+	created := call(http.MethodPost, "/v1/tasks", fixed)
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+	var task struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &task))
+	occurrence := "/v1/tasks/" + task.ID + "/occurrences/2030-01-07"
+	require.Equal(t, http.StatusOK, call(http.MethodPut, occurrence, `{"start":"21:00","end":"22:00"}`).Code)
+
+	recurring := call(http.MethodPut, "/v1/tasks/"+task.ID, recurringEnglish)
+	require.Equal(t, http.StatusOK, recurring.Code, recurring.Body.String())
+
+	assert.Zero(t, mondayBlocks(t, call(http.MethodGet, "/v1/routine?week=2030-01-07", "")),
+		"the move made to the fixed task does not apply to the recurring one")
+	back := call(http.MethodPut, "/v1/tasks/"+task.ID, fixed)
+	require.Equal(t, http.StatusOK, back.Code, back.Body.String())
+	assert.Equal(t, http.StatusNotFound, call(http.MethodDelete, occurrence, "").Code)
+}
+
+const recurringEnglish = `{"title":"Inglês","area":"Estudos","kind":"recurring","priority":"medium",
+	"timesPerWeek":2,"durationMinutes":60}`
+
+func TestBecomingFixedDropsSessions(t *testing.T) {
+	call := api(t)
+	created := call(http.MethodPost, "/v1/tasks", recurringEnglish)
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+	var task struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &task))
+	session := "/v1/tasks/" + task.ID + "/sessions/2030-01-07"
+	require.Equal(t, http.StatusOK, call(http.MethodPut, session, `{"start":"07:00"}`).Code)
+	require.Equal(t, 1, mondayBlocks(t, call(http.MethodGet, "/v1/routine?week=2030-01-07", "")))
+
+	fixed := call(http.MethodPut, "/v1/tasks/"+task.ID,
+		`{"title":"Inglês","area":"Estudos","kind":"fixed","weekdays":["tuesday"],"start":"19:00","end":"20:00"}`)
+	require.Equal(t, http.StatusOK, fixed.Code, fixed.Body.String())
+
+	assert.Zero(t, mondayBlocks(t, call(http.MethodGet, "/v1/routine?week=2030-01-07", "")))
+	assert.Equal(t, http.StatusNotFound, call(http.MethodDelete, session, "").Code)
+}
+
 func TestEveryModuleIsWired(t *testing.T) {
 	call := api(t)
 
@@ -112,10 +157,10 @@ func TestEveryModuleIsWired(t *testing.T) {
 	}
 }
 
-func TestChangingAHabitsWeekdaysKeepsTheOldOnes(t *testing.T) {
+func TestChangingAHabitsRecurrenceKeepsTheOldOne(t *testing.T) {
 	call, tx := apiOn(t)
 	const threeDays = `{"title":"Academia","area":"Saúde","kind":"recurring","priority":"high",
-		"weekdays":["monday","wednesday","friday"],"durationMinutes":60}`
+		"timesPerWeek":3,"weekdays":["monday","wednesday","friday"],"durationMinutes":60}`
 	created := call(http.MethodPost, "/v1/tasks", threeDays)
 	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
 	var task struct {
@@ -125,11 +170,17 @@ func TestChangingAHabitsWeekdaysKeepsTheOldOnes(t *testing.T) {
 
 	longer := strings.Replace(threeDays, `"durationMinutes":60`, `"durationMinutes":90`, 1)
 	require.Equal(t, http.StatusOK, call(http.MethodPut, "/v1/tasks/"+task.ID, longer).Code)
-	fiveDays := strings.Replace(threeDays, `"monday","wednesday","friday"`,
-		`"monday","tuesday","wednesday","thursday","friday"`, 1)
-	require.Equal(t, http.StatusOK, call(http.MethodPut, "/v1/tasks/"+task.ID, fiveDays).Code)
+	fiveTimes := strings.Replace(threeDays, `"timesPerWeek":3`, `"timesPerWeek":5`, 1)
+	require.Equal(t, http.StatusOK, call(http.MethodPut, "/v1/tasks/"+task.ID, fiveTimes).Code)
 
-	var kept []int
-	require.NoError(t, tx.Raw("SELECT weekdays FROM habit_schedules WHERE task_id = ?", task.ID).Scan(&kept).Error)
-	assert.Equal(t, []int{1<<1 | 1<<3 | 1<<5}, kept, "only the weekday change is kept, with the old days")
+	var kept []struct {
+		Weekdays     int
+		TimesPerWeek int
+	}
+	require.NoError(t, tx.Raw("SELECT weekdays, times_per_week FROM habit_schedules WHERE task_id = ?", task.ID).
+		Scan(&kept).Error)
+	assert.Equal(t, []struct {
+		Weekdays     int
+		TimesPerWeek int
+	}{{1<<1 | 1<<3 | 1<<5, 3}}, kept, "only the recurrence change is kept, with the old one")
 }

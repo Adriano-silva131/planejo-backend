@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/auth"
+	"github.com/Adriano-silva131/planejo-backend/internal/platform/db"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/db/dbtest"
 	"github.com/Adriano-silva131/planejo-backend/internal/platform/httpx"
 	"github.com/Adriano-silva131/planejo-backend/internal/routine/app"
@@ -45,30 +46,52 @@ func (fakeVerifier) Verify(_ context.Context, token string) (auth.User, error) {
 	return auth.User{}, auth.ErrInvalidToken
 }
 
+// ownedTask holds a fixed task, or a recurring or one-off one when plannable
+// is set.
 type ownedTask struct {
-	owner uuid.UUID
-	task  domain.FixedTask
+	owner     uuid.UUID
+	task      domain.FixedTask
+	plannable *domain.PlannableTask
 }
 
 // fakeTasks stands in for the task module, which main wires in production.
 type fakeTasks map[uuid.UUID]ownedTask
 
-func (f fakeTasks) Fixed(_ context.Context, userID uuid.UUID, _, _ calendar.Date) ([]domain.FixedTask, error) {
-	var out []domain.FixedTask
+func (f fakeTasks) List(_ context.Context, userID uuid.UUID) ([]domain.FixedTask, []domain.PlannableTask, error) {
+	var fixed []domain.FixedTask
+	var plannable []domain.PlannableTask
 	for _, t := range f {
-		if t.owner == userID {
-			out = append(out, t.task)
+		switch {
+		case t.owner != userID:
+		case t.plannable != nil:
+			plannable = append(plannable, *t.plannable)
+		default:
+			fixed = append(fixed, t.task)
 		}
 	}
-	return out, nil
+	return fixed, plannable, nil
 }
 
-func (f fakeTasks) Get(_ context.Context, userID, id uuid.UUID) (domain.FixedTask, error) {
+func (f fakeTasks) GetFixed(_ context.Context, userID, id uuid.UUID) (domain.FixedTask, error) {
 	t, ok := f[id]
-	if !ok || t.owner != userID {
+	switch {
+	case !ok || t.owner != userID:
 		return domain.FixedTask{}, domain.ErrTaskNotFound
+	case t.plannable != nil:
+		return domain.FixedTask{}, domain.ErrNoOccurrences
 	}
 	return t.task, nil
+}
+
+func (f fakeTasks) GetPlannable(_ context.Context, userID, id uuid.UUID) (domain.PlannableTask, error) {
+	t, ok := f[id]
+	switch {
+	case !ok || t.owner != userID:
+		return domain.PlannableTask{}, domain.ErrTaskNotFound
+	case t.plannable == nil:
+		return domain.PlannableTask{}, domain.ErrFixedTaskSession
+	}
+	return *t.plannable, nil
 }
 
 type server struct {
@@ -90,7 +113,7 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewRoutine(tasks, infra.NewRepository(tx)))
+	Register(router.Authenticated, app.NewRoutine(tasks, infra.NewRepository(tx), infra.NewSessionRepository(tx), db.NewTransactor(tx)))
 	return server{t: t, tx: tx, tasks: tasks, handler: router.Handler}
 }
 
@@ -104,6 +127,26 @@ func (s server) addTask(owner uuid.UUID, task domain.FixedTask) string {
 		 VALUES (?, ?, ?, ?, 'fixed', 2, 540, 600)`, task.ID, owner, task.Title, task.Area).Error)
 	s.tasks[task.ID] = ownedTask{owner: owner, task: task}
 	return task.ID.String()
+}
+
+// addPlannable stores a recurring or one-off row, which sessions reference,
+// and exposes the task through the fake task reader.
+func (s server) addPlannable(owner uuid.UUID, task domain.PlannableTask) string {
+	s.t.Helper()
+	task.ID = uuid.New()
+	insert := `INSERT INTO tasks (id, user_id, title, area, kind, priority, times_per_week, duration_minutes)
+		VALUES (?, ?, ?, ?, 'recurring', 'high', 3, 60)`
+	if task.Kind == domain.OneOffKind {
+		insert = `INSERT INTO tasks (id, user_id, title, area, kind, priority, deadline)
+			VALUES (?, ?, ?, ?, 'one_off', 'high', '2026-10-30')`
+	}
+	require.NoError(s.t, s.tx.Exec(insert, task.ID, owner, task.Title, task.Area).Error)
+	s.tasks[task.ID] = ownedTask{owner: owner, plannable: &task}
+	return task.ID.String()
+}
+
+func gym() domain.PlannableTask {
+	return domain.PlannableTask{Title: "Academia", Area: "Saúde", Kind: domain.RecurringKind, Duration: time.Hour}
 }
 
 func (s server) do(method, path, token, body string) *httptest.ResponseRecorder {
@@ -190,9 +233,86 @@ func TestWeekRoutine(t *testing.T) {
 	assert.Equal(t, "monday", monday["weekday"])
 	first, _ := monday["blocks"].([]any)[0].(map[string]any)
 	assert.Equal(t, map[string]any{
-		"taskId": first["taskId"], "title": "Dormir", "area": "Descanso", "start": "00:00", "end": "07:00",
+		"taskId": first["taskId"], "title": "Dormir", "area": "Descanso", "taskKind": "fixed", "start": "00:00", "end": "07:00",
 		"adjusted": false, "continuesFromPreviousDay": true, "continuesNextDay": false,
 	}, first)
+}
+
+func TestPlaceSessionsOnAnyDay(t *testing.T) {
+	srv := newServer(t)
+	srv.addTask(userA, work(t))
+	gymID := srv.addPlannable(userA, gym())
+	reportID := srv.addPlannable(userA, domain.PlannableTask{Title: "Relatório", Area: "Trabalho", Kind: domain.OneOffKind})
+
+	saturday := srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-31", "token-a", `{"start":"10:00"}`)
+	tuesday := srv.do(http.MethodPut, "/v1/tasks/"+reportID+"/sessions/2026-10-27", "token-a", `{"start":"19:00","end":"00:00"}`)
+	moved := srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-31", "token-a", `{"start":"16:00"}`)
+
+	require.Equal(t, http.StatusOK, saturday.Code, saturday.Body.String())
+	require.Equal(t, http.StatusOK, tuesday.Code, tuesday.Body.String())
+	require.Equal(t, http.StatusOK, moved.Code, moved.Body.String())
+	assert.Equal(t, "11:00", decode(t, saturday)["end"], "lasts the task's duration")
+	assert.Equal(t, "24:00", decode(t, tuesday)["end"])
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-28", "token-a", ""))
+	assert.Equal(t, []string{"Academia 16:00-17:00"}, blocks(t, week, 5), "placing again the same day moves it")
+	assert.Equal(t, []string{"Trabalho 09:00-18:00", "Relatório 19:00-24:00"}, blocks(t, week, 1))
+	days, _ := week["days"].([]any)
+	day, _ := days[1].(map[string]any)
+	block, _ := day["blocks"].([]any)[1].(map[string]any)
+	assert.Equal(t, "one_off", block["taskKind"])
+	assert.NotContains(t, day, "suggestions")
+}
+
+func TestRemoveSession(t *testing.T) {
+	srv := newServer(t)
+	path := "/v1/tasks/" + srv.addPlannable(userA, gym()) + "/sessions/2026-10-28"
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, path, "token-a", `{"start":"07:00"}`).Code)
+
+	assert.Equal(t, http.StatusNoContent, srv.do(http.MethodDelete, path, "token-a", "").Code)
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-28", "token-a", ""))
+	assert.Empty(t, blocks(t, week, 2))
+	again := srv.do(http.MethodDelete, path, "token-a", "")
+	assert.Equal(t, "session_not_found", errorOf(t, again)["code"])
+}
+
+func TestSessionRules(t *testing.T) {
+	srv := newServer(t)
+	fixedID := srv.addTask(userA, work(t))
+	gymID := srv.addPlannable(userA, gym())
+	reportID := srv.addPlannable(userA, domain.PlannableTask{Title: "Relatório", Area: "Trabalho", Kind: domain.OneOffKind})
+
+	cases := map[string]struct {
+		path, body string
+	}{
+		"fixed_task_session":       {"/v1/tasks/" + fixedID + "/sessions/2026-10-28", `{"start":"07:00"}`},
+		"session_end_required":     {"/v1/tasks/" + reportID + "/sessions/2026-10-28", `{"start":"07:00"}`},
+		"session_past_midnight":    {"/v1/tasks/" + gymID + "/sessions/2026-10-28", `{"start":"23:30"}`},
+		"task_without_occurrences": {"/v1/tasks/" + gymID + "/occurrences/2026-10-28", `{"skipped":true}`},
+	}
+	for want, tc := range cases {
+		t.Run(want, func(t *testing.T) {
+			rec := srv.do(http.MethodPut, tc.path, "token-a", tc.body)
+
+			require.Equal(t, http.StatusUnprocessableEntity, rec.Code, rec.Body.String())
+			assert.Equal(t, want, errorOf(t, rec)["code"])
+		})
+	}
+}
+
+func TestOtherUsersSessionsAreNotFound(t *testing.T) {
+	srv := newServer(t)
+	path := "/v1/tasks/" + srv.addPlannable(userA, gym()) + "/sessions/2026-10-28"
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, path, "token-a", `{"start":"07:00"}`).Code)
+
+	put := srv.do(http.MethodPut, path, "token-b", `{"start":"08:00"}`)
+	remove := srv.do(http.MethodDelete, path, "token-b", "")
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-28", "token-b", ""))
+
+	assert.Equal(t, "task_not_found", errorOf(t, put)["code"])
+	assert.Equal(t, http.StatusNotFound, remove.Code)
+	assert.Empty(t, blocks(t, week, 2))
+	own := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-28", "token-a", ""))
+	assert.Equal(t, []string{"Academia 07:00-08:00"}, blocks(t, own, 2), "the owner's session must survive")
 }
 
 func TestAdjustOnlyThatWeek(t *testing.T) {
@@ -237,6 +357,7 @@ func TestAdjustReportsFields(t *testing.T) {
 		fields map[string]any
 	}{
 		"skip with times": {`{"skipped":true,"start":"10:00"}`, map[string]any{"start": []any{"Não se aplica ao tirar a ocorrência."}}},
+		"missing start":   {`{"end":"10:00"}`, map[string]any{"start": []any{"Obrigatório para mudar o horário; ou envie skipped."}}},
 		"missing end":     {`{"start":"10:00"}`, map[string]any{"end": []any{"Obrigatório para mudar o horário; ou envie skipped."}}},
 	}
 	for name, tc := range cases {
@@ -258,6 +379,59 @@ func TestAdjustRules(t *testing.T) {
 
 	assert.Equal(t, "not_an_occurrence", errorOf(t, saturday)["code"])
 	assert.Equal(t, "adjustment_invalid_time_range", errorOf(t, same)["code"])
+}
+
+// workAndLunch adds work from 09:00 to 18:00 and lunch inside it, the two
+// layers of a weekday, and returns the lunch's id.
+func (s server) workAndLunch() string {
+	s.t.Helper()
+	s.addTask(userA, work(s.t))
+	lunch := work(s.t)
+	lunch.Title, lunch.Start, lunch.End = "Almoço", 12*60, 13*60
+	return s.addTask(userA, lunch)
+}
+
+func TestAThirdLayerIsRefused(t *testing.T) {
+	srv := newServer(t)
+	srv.workAndLunch()
+	gymID := srv.addPlannable(userA, gym())
+
+	rec := srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-26", "token-a", `{"start":"12:30"}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, map[string]any{
+		"code":    "schedule_overlap",
+		"message": "Nesse horário já há duas tarefas: Trabalho e Almoço (seg 26/10, 12:30–13:00).",
+	}, errorOf(t, rec))
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-26", "token-a", ""))
+	assert.Equal(t, []string{"Trabalho 09:00-18:00", "Almoço 12:00-13:00"}, blocks(t, week, 0), "nothing was saved")
+}
+
+func TestMovingAnOccurrenceOntoTwoLayersIsRefused(t *testing.T) {
+	srv := newServer(t)
+	lunchID := srv.workAndLunch()
+	gymID := srv.addPlannable(userA, gym())
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-27", "token-a", `{"start":"15:00"}`).Code)
+
+	rec := srv.do(http.MethodPut, "/v1/tasks/"+lunchID+"/occurrences/2026-10-27", "token-a", `{"start":"15:30","end":"16:30"}`)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, "schedule_overlap", errorOf(t, rec)["code"])
+}
+
+func TestResettingOntoTwoLayersIsRefused(t *testing.T) {
+	srv := newServer(t)
+	lunchID := srv.workAndLunch()
+	gymID := srv.addPlannable(userA, gym())
+	occurrence := "/v1/tasks/" + lunchID + "/occurrences/2026-10-28"
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, occurrence, "token-a", `{"skipped":true}`).Code)
+	require.Equal(t, http.StatusOK, srv.do(http.MethodPut, "/v1/tasks/"+gymID+"/sessions/2026-10-28", "token-a", `{"start":"12:00"}`).Code)
+
+	rec := srv.do(http.MethodDelete, occurrence, "token-a", "")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	week := decode(t, srv.do(http.MethodGet, "/v1/routine?week=2026-10-26", "token-a", ""))
+	assert.Equal(t, []string{"Trabalho 09:00-18:00", "Academia 12:00-13:00"}, blocks(t, week, 2), "lunch stays skipped")
 }
 
 func TestOtherUsersTasksAreNotFound(t *testing.T) {

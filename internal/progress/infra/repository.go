@@ -15,13 +15,13 @@ import (
 )
 
 type checkInModel struct {
-	TaskID    uuid.UUID `gorm:"primaryKey"`
-	Date      time.Time `gorm:"primaryKey"`
-	UserID    uuid.UUID
-	Minutes   int
-	Completed bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	TaskID uuid.UUID `gorm:"primaryKey"`
+	Date   time.Time `gorm:"primaryKey"`
+	UserID uuid.UUID
+	// StartMinute is NULL when the user did not say when the task started.
+	StartMinute *int
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 func (checkInModel) TableName() string {
@@ -29,27 +29,31 @@ func (checkInModel) TableName() string {
 }
 
 func toModel(c domain.CheckIn) checkInModel {
-	return checkInModel{
+	m := checkInModel{
 		TaskID:    c.TaskID,
 		Date:      c.Date.Time(),
 		UserID:    c.UserID,
-		Minutes:   c.Minutes,
-		Completed: c.Completed,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}
+	if start, ok := c.Start.Get(); ok {
+		m.StartMinute = new(int(start))
+	}
+	return m
 }
 
 func toDomain(m checkInModel) domain.CheckIn {
-	return domain.CheckIn{
+	c := domain.CheckIn{
 		UserID:    m.UserID,
 		TaskID:    m.TaskID,
 		Date:      calendar.NewDate(m.Date.Date()),
-		Minutes:   m.Minutes,
-		Completed: m.Completed,
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
+	if m.StartMinute != nil {
+		c.Start = calendar.SomeTime(calendar.TimeOfDay(*m.StartMinute))
+	}
+	return c
 }
 
 type Repository struct {
@@ -65,7 +69,7 @@ func NewRepository(db *gorm.DB) *Repository {
 var upsert = db.OwnedUpsert{
 	Table:    "checkins",
 	Conflict: []string{"task_id", "date"},
-	Update:   []string{"minutes", "completed", "updated_at"},
+	Update:   []string{"start_minute", "updated_at"},
 }
 
 func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn, error) {
@@ -81,14 +85,30 @@ func (r *Repository) Save(ctx context.Context, c domain.CheckIn) (domain.CheckIn
 }
 
 func (r *Repository) Delete(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
-	res := db.Conn(ctx, r.db).
-		Where("user_id = ? AND task_id = ? AND date = ?", userID, taskID, date.Time()).
-		Delete(&checkInModel{})
-	if res.Error != nil {
-		return fmt.Errorf("checkin: delete: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
+	key := db.TaskDay{UserID: userID, TaskID: taskID, Date: date.Time()}
+	deleted, err := db.DeleteTaskDay(ctx, r.db, &checkInModel{}, key)
+	switch {
+	case err != nil:
+		return fmt.Errorf("checkin: delete: %w", err)
+	case !deleted:
 		return domain.ErrCheckInNotFound
+	}
+	return nil
+}
+
+func (r *Repository) DeleteForTask(ctx context.Context, userID, taskID uuid.UUID) error {
+	err := db.Conn(ctx, r.db).Where("user_id = ? AND task_id = ?", userID, taskID).Delete(&checkInModel{}).Error
+	if err != nil {
+		return fmt.Errorf("checkin: delete for task: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) LockTask(ctx context.Context, userID, taskID uuid.UUID) error {
+	err := db.Conn(ctx, r.db).
+		Exec("SELECT 1 FROM tasks WHERE id = ? AND user_id = ? FOR UPDATE", taskID, userID).Error
+	if err != nil {
+		return fmt.Errorf("checkin: lock task: %w", err)
 	}
 	return nil
 }

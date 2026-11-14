@@ -17,15 +17,15 @@ var (
 	ErrFixedTaskPriority = invalid("fixed_task_priority", "Tarefa fixa não tem prioridade: ela sempre acontece.")
 
 	ErrFixedTaskDays    = invalid("fixed_task_days", "Tarefa fixa precisa de dias da semana ou de uma data, não dos dois.")
-	ErrWeekdaysRequired = invalid("task_weekdays_required", "Escolha ao menos um dia da semana.")
 	ErrInvalidTimeRange = invalid("task_invalid_time_range", "O início e o fim não podem ser iguais.")
 	ErrInvalidPeriod    = invalid("task_invalid_period", "Período inválido: use manhã, tarde ou noite.")
 	ErrDeadlineRequired = invalid("one_off_task_deadline", "Tarefa pontual precisa de prazo.")
 
+	ErrInvalidTimesPerWeek = invalid("task_invalid_times_per_week",
+		"Escolha de 1 a 7 vezes por semana.")
+
 	ErrInvalidSessionDuration = invalid("task_invalid_session_duration",
 		"A duração de cada sessão precisa ficar entre 5 minutos e 12 horas.")
-	ErrInvalidTotalDuration = invalid("task_invalid_total_duration",
-		"A duração total precisa ficar entre 5 minutos e 100 horas.")
 )
 
 func invalid(code, message string) error {

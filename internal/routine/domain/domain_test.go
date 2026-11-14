@@ -60,7 +60,7 @@ func slots(d Day) []slot {
 func TestBuildWeekFromThePattern(t *testing.T) {
 	work, class, lunch, doctor, _ := fixtures(t)
 
-	w := BuildWeek(day(2), []FixedTask{class, work, lunch, doctor}, nil)
+	w := BuildWeek(day(2), []FixedTask{class, work, lunch, doctor}, nil, nil, nil)
 
 	assert.Equal(t, monday, w.Start)
 	assert.Equal(t, day(6), w.End)
@@ -75,7 +75,7 @@ func TestBuildWeekFromThePattern(t *testing.T) {
 func TestBuildWeekSplitsAtMidnight(t *testing.T) {
 	_, _, _, _, sleep := fixtures(t)
 
-	w := BuildWeek(monday, []FixedTask{sleep}, nil)
+	w := BuildWeek(monday, []FixedTask{sleep}, nil, nil, nil)
 
 	// The Sunday before ends on this Monday; this Sunday starts here and ends next week.
 	require.Equal(t, []slot{{"Dormir", "00:00", "07:00"}}, slots(w.Days[0]))
@@ -87,7 +87,7 @@ func TestBuildWeekSplitsAtMidnight(t *testing.T) {
 func TestBuildWeekEndingAtMidnightHasNoSecondPart(t *testing.T) {
 	late := FixedTask{ID: uuid.New(), Title: "Série", Area: "Lazer", Date: day(4), Start: at(22), End: at(0)}
 
-	w := BuildWeek(monday, []FixedTask{late}, nil)
+	w := BuildWeek(monday, []FixedTask{late}, nil, nil, nil)
 
 	assert.Equal(t, []slot{{"Série", "22:00", "24:00"}}, slots(w.Days[4]))
 	assert.False(t, w.Days[4].Blocks[0].ContinuesNextDay)
@@ -102,7 +102,7 @@ func TestBuildWeekAppliesAdjustments(t *testing.T) {
 		{TaskID: work.ID, Date: day(5), Start: at(9), End: at(12)}, // Saturday is not an occurrence
 	}
 
-	w := BuildWeek(monday, []FixedTask{work, class}, adjustments)
+	w := BuildWeek(monday, []FixedTask{work, class}, adjustments, nil, nil)
 
 	assert.Equal(t, []slot{{"Trabalho", "09:00", "18:00"}}, slots(w.Days[0]), "class skipped this Monday")
 	assert.Equal(t, []slot{{"Trabalho", "09:00", "16:00"}}, slots(w.Days[4]))
@@ -112,10 +112,10 @@ func TestBuildWeekAppliesAdjustments(t *testing.T) {
 
 	backToPattern := BuildWeek(monday, []FixedTask{work}, []Adjustment{
 		{TaskID: work.ID, Date: day(1), Start: work.Start, End: work.End},
-	})
+	}, nil, nil)
 	assert.False(t, backToPattern.Days[1].Blocks[0].Adjusted, "same times as the pattern")
 
-	nextWeek := BuildWeek(day(7), []FixedTask{work, class}, nil)
+	nextWeek := BuildWeek(day(7), []FixedTask{work, class}, nil, nil, nil)
 	assert.Len(t, nextWeek.Days[0].Blocks, 2, "the pattern is unchanged")
 }
 
@@ -124,8 +124,8 @@ func TestWeeklyTasksStartOnTheWeekTheyWereCreated(t *testing.T) {
 	work.CreatedOn = day(9) // Wednesday of next week
 	doctor.CreatedOn = day(9)
 
-	thisWeek := BuildWeek(monday, []FixedTask{work, doctor}, nil)
-	creationWeek := BuildWeek(day(7), []FixedTask{work}, nil)
+	thisWeek := BuildWeek(monday, []FixedTask{work, doctor}, nil, nil, nil)
+	creationWeek := BuildWeek(day(7), []FixedTask{work}, nil, nil, nil)
 	_, err := NewAdjustment(userID, work, day(0), Change{Skip: true})
 
 	assert.Equal(t, []slot{{"Consulta", "15:00", "16:00"}}, slots(thisWeek.Days[3]), "a dated task shows on its date")
@@ -166,6 +166,76 @@ func TestNewAdjustmentRejects(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			_, err := NewAdjustment(userID, tc.task, tc.date, tc.change)
+
+			assert.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
+func plannable() (gym, report PlannableTask) {
+	gym = PlannableTask{ID: uuid.New(), Title: "Academia", Area: "Saúde", Kind: RecurringKind, Duration: time.Hour}
+	report = PlannableTask{ID: uuid.New(), Title: "Relatório", Area: "Trabalho", Kind: OneOffKind}
+	return gym, report
+}
+
+func TestBuildWeekPlacesTheSessionsOfTheWeek(t *testing.T) {
+	work, _, _, _, _ := fixtures(t)
+	gym, report := plannable()
+	sessions := []Session{
+		{TaskID: gym.ID, Date: day(5), Start: at(10), End: at(11)}, // any day, not only the usual ones
+		{TaskID: report.ID, Date: day(1), Start: at(19), End: EndOfDay},
+		{TaskID: gym.ID, Date: day(1), Start: at(7), End: at(8)},
+		{TaskID: gym.ID, Date: day(8), Start: at(7), End: at(8)},     // next week
+		{TaskID: uuid.New(), Date: day(2), Start: at(7), End: at(8)}, // not a plannable task anymore
+	}
+
+	w := BuildWeek(monday, []FixedTask{work}, nil, []PlannableTask{gym, report}, sessions)
+
+	assert.Equal(t, []slot{{"Academia", "07:00", "08:00"}, {"Trabalho", "09:00", "18:00"}, {"Relatório", "19:00", "24:00"}},
+		slots(w.Days[1]), "sessions and fixed tasks in order of start")
+	assert.Equal(t, RecurringKind, w.Days[1].Blocks[0].Kind)
+	assert.Equal(t, OneOffKind, w.Days[1].Blocks[2].Kind)
+	assert.False(t, w.Days[1].Blocks[0].Adjusted)
+	assert.Equal(t, []slot{{"Academia", "10:00", "11:00"}}, slots(w.Days[5]))
+	assert.Equal(t, []slot{{"Trabalho", "09:00", "18:00"}}, slots(w.Days[2]))
+}
+
+func TestNewSession(t *testing.T) {
+	gym, report := plannable()
+
+	byDuration, err := NewSession(userID, gym, day(5), Placement{Start: at(19)})
+	require.NoError(t, err)
+	withEnd, err := NewSession(userID, gym, day(5), Placement{Start: at(19), End: calendar.SomeTime(at(19) + 30)})
+	require.NoError(t, err)
+	untilMidnight, err := NewSession(userID, report, day(1), Placement{Start: at(22), End: calendar.SomeTime(0)})
+	require.NoError(t, err)
+	lastHour, err := NewSession(userID, gym, day(1), Placement{Start: at(23)})
+	require.NoError(t, err)
+
+	assert.Equal(t, Session{UserID: userID, TaskID: gym.ID, Date: day(5), Start: at(19), End: at(20)}, byDuration)
+	assert.Equal(t, at(19)+30, withEnd.End)
+	assert.Equal(t, EndOfDay, untilMidnight.End)
+	assert.Equal(t, EndOfDay, lastHour.End)
+}
+
+func TestNewSessionRejects(t *testing.T) {
+	gym, report := plannable()
+	cases := map[string]struct {
+		task      PlannableTask
+		placement Placement
+		want      error
+	}{
+		"one-off without end":    {report, Placement{Start: at(9)}, ErrSessionEndRequired},
+		"duration past midnight": {gym, Placement{Start: at(23) + 30}, ErrSessionPastMidnight},
+		"end before start":       {report, Placement{Start: at(22), End: calendar.SomeTime(at(1))}, ErrSessionPastMidnight},
+		"same start and end":     {report, Placement{Start: at(9), End: calendar.SomeTime(at(9))}, ErrInvalidTimeRange},
+		"start out of range":     {gym, Placement{Start: EndOfDay}, calendar.ErrInvalidTime},
+		"end out of range":       {report, Placement{Start: at(9), End: calendar.SomeTime(EndOfDay)}, calendar.ErrInvalidTime},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := NewSession(userID, tc.task, day(0), tc.placement)
 
 			assert.ErrorIs(t, err, tc.want)
 		})

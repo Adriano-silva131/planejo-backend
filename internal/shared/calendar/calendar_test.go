@@ -99,6 +99,8 @@ func TestDateArithmetic(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, thursday.Equal(parsed))
 	assert.False(t, thursday.Equal(thursday.AddDays(1)))
+	assert.Equal(t, 4, thursday.AddDays(4).DaysSince(thursday))
+	assert.Equal(t, -3, thursday.AddDays(-3).DaysSince(thursday))
 }
 
 func TestStartOfWeekIsMonday(t *testing.T) {
@@ -123,4 +125,26 @@ func TestLocationInContext(t *testing.T) {
 
 	assert.Equal(t, time.UTC, LocationFrom(t.Context()))
 	assert.Equal(t, saoPaulo, LocationFrom(WithLocation(t.Context(), saoPaulo)))
+}
+
+func TestOptionalTime(t *testing.T) {
+	absent, err := ParseOptionalTimeOfDay("")
+	require.NoError(t, err)
+	_, set := absent.Get()
+	assert.False(t, set)
+	assert.Empty(t, absent.String())
+	assert.Equal(t, OptionalTime{}, absent, "the zero value is absent")
+
+	seven, err := ParseOptionalTimeOfDay("07:00")
+	require.NoError(t, err)
+	got, set := seven.Get()
+	assert.True(t, set)
+	assert.Equal(t, TimeOfDay(7*60), got)
+	assert.Equal(t, "07:00", seven.String())
+	assert.Equal(t, SomeTime(7*60), seven, "comparable with ==")
+	assert.True(t, SomeTime(0).Valid(), "midnight is a time, not absent")
+	assert.False(t, SomeTime(24*60).Valid())
+
+	_, err = ParseOptionalTimeOfDay("7h")
+	assert.ErrorIs(t, err, ErrInvalidTime)
 }

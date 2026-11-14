@@ -23,27 +23,33 @@ type Task struct {
 	Title string
 	Area  string
 	Kind  TaskKind
-	// Weekdays and TimesPerWeek, their count, describe a recurring task.
-	Weekdays     calendar.Weekdays
+	// TimesPerWeek, on any days, and Weekdays, the days the user usually does
+	// it, describe a recurring task.
 	TimesPerWeek int
-	// TotalMinutes and Deadline describe a one-off task.
-	TotalMinutes int
-	Deadline     calendar.Date
+	Weekdays     calendar.Weekdays
+	// Deadline describes a one-off task.
+	Deadline calendar.Date
 	// CreatedAt is when the task was created. CreatedOn is that day in UTC,
 	// or in the user's time zone when the caller knows it.
 	CreatedAt time.Time
 	CreatedOn calendar.Date
-	// PastSchedules are the weekdays a recurring task had before its schedule
+	// PastSchedules are how a recurring task repeated before its schedule
 	// changed, oldest first.
 	PastSchedules []PastSchedule
 }
 
-// PastSchedule says the task was set for Weekdays before its schedule
-// changed on ChangedOn, a day in the user's time zone. Empty Weekdays means it
-// was not a recurring task then.
+// Recurrence is how a task repeats: TimesPerWeek times a week, usually on
+// Weekdays. Zero TimesPerWeek means it is not a recurring task.
+type Recurrence struct {
+	TimesPerWeek int
+	Weekdays     calendar.Weekdays
+}
+
+// PastSchedule says the task repeated as Recurrence before its schedule
+// changed on ChangedOn, a day in the user's time zone.
 type PastSchedule struct {
 	ChangedOn calendar.Date
-	Weekdays  calendar.Weekdays
+	Recurrence
 }
 
 // Until is the Monday of the week the change took effect: the weeks before it
@@ -52,15 +58,14 @@ func (s PastSchedule) Until() calendar.Date {
 	return s.ChangedOn.StartOfWeek()
 }
 
-// weekdaysOn returns the weekdays the task was set for in the week starting
-// on start.
-func (t Task) weekdaysOn(start calendar.Date) calendar.Weekdays {
+// recurrenceIn returns how the task repeated in the week starting on start.
+func (t Task) recurrenceIn(start calendar.Date) Recurrence {
 	for _, s := range t.PastSchedules {
 		if start.Before(s.Until()) {
-			return s.Weekdays
+			return s.Recurrence
 		}
 	}
-	return t.Weekdays
+	return Recurrence{TimesPerWeek: t.TimesPerWeek, Weekdays: t.Weekdays}
 }
 
 // changeIn returns the schedule change that took effect in the week starting

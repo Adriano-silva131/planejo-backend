@@ -24,7 +24,8 @@ func Register(api huma.API, tasks *app.Tasks) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-task", Method: http.MethodPost, Path: "/tasks", Tags: tags,
 		Summary: "Cria uma tarefa", DefaultStatus: http.StatusCreated,
-		Errors: []int{http.StatusUnprocessableEntity},
+		Description: "Tarefa fixa ocupa horário na rotina. No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusUnprocessableEntity, http.StatusConflict},
 	}, h.create)
 	huma.Register(api, huma.Operation{
 		OperationID: "list-tasks", Method: http.MethodGet, Path: "/tasks", Tags: tags,
@@ -47,8 +48,9 @@ func Register(api huma.API, tasks *app.Tasks) {
 	}, h.get)
 	huma.Register(api, huma.Operation{
 		OperationID: "update-task", Method: http.MethodPut, Path: "/tasks/{id}", Tags: tags,
-		Summary: "Substitui os dados de uma tarefa",
-		Errors:  []int{http.StatusNotFound, http.StatusUnprocessableEntity},
+		Summary:     "Substitui os dados de uma tarefa",
+		Description: "Tarefa fixa ocupa horário na rotina. No máximo duas coisas podem acontecer ao mesmo tempo: o que criaria uma terceira é recusado com 409 schedule_overlap.",
+		Errors:      []int{http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusConflict},
 	}, h.update)
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-task", Method: http.MethodDelete, Path: "/tasks/{id}", Tags: tags,

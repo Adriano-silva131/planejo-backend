@@ -13,7 +13,7 @@ import (
 type changeFields struct {
 	Skipped bool   `json:"skipped,omitempty" doc:"Tira a ocorrência desta semana; sem start e end"`
 	Start   string `json:"start,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"Novo início, no fuso do usuário" example:"09:00"`
-	End     string `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"Novo fim; antes do início, termina no dia seguinte" example:"16:00"`
+	End     string `json:"end,omitempty" pattern:"^([01][0-9]|2[0-3]):[0-5][0-9]$" patternDescription:"HH:MM" doc:"Novo fim, obrigatório ao mudar o horário; antes do início, termina no dia seguinte" example:"16:00"`
 }
 
 // check reports, per field, what is missing or does not fit the request.
@@ -27,10 +27,11 @@ func (f changeFields) check() []error {
 		}
 		return errs
 	}
-	for name, value := range map[string]string{"start": f.Start, "end": f.End} {
-		if value == "" {
-			errs = append(errs, fieldError(name, "Obrigatório para mudar o horário; ou envie skipped."))
-		}
+	if f.Start == "" {
+		errs = append(errs, fieldError("start", "Obrigatório para mudar o horário; ou envie skipped."))
+	}
+	if f.End == "" {
+		errs = append(errs, fieldError("end", "Obrigatório para mudar o horário; ou envie skipped."))
 	}
 	return errs
 }
@@ -82,9 +83,10 @@ type blockBody struct {
 	TaskID   string `json:"taskId" format:"uuid"`
 	Title    string `json:"title"`
 	Area     string `json:"area"`
+	TaskKind string `json:"taskKind" enum:"fixed,recurring,one_off" doc:"recurring e one_off: sessão que o usuário encaixou neste dia"`
 	Start    string `json:"start" example:"09:00"`
-	End      string `json:"end" doc:"24:00 quando continua no dia seguinte" example:"18:00"`
-	Adjusted bool   `json:"adjusted" doc:"O horário desta semana difere do padrão da tarefa"`
+	End      string `json:"end" doc:"24:00 quando continua no dia seguinte ou termina à meia-noite" example:"18:00"`
+	Adjusted bool   `json:"adjusted" doc:"fixed: o horário desta semana difere do padrão da tarefa"`
 
 	ContinuesFromPreviousDay bool `json:"continuesFromPreviousDay" doc:"Começou no dia anterior"`
 	ContinuesNextDay         bool `json:"continuesNextDay" doc:"Termina no dia seguinte"`
@@ -115,6 +117,7 @@ func toWeekBody(w domain.Week) routineWeekBody {
 				TaskID:                   bl.TaskID.String(),
 				Title:                    bl.Title,
 				Area:                     bl.Area,
+				TaskKind:                 string(bl.Kind),
 				Start:                    bl.Start.String(),
 				End:                      bl.End.String(),
 				Adjusted:                 bl.Adjusted,

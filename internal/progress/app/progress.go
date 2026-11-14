@@ -10,30 +10,61 @@ import (
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 )
 
+// Transactor runs fn in a transaction carried by ctx.
+type Transactor interface {
+	InTx(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
 type Progress struct {
 	tasks domain.Tasks
 	repo  domain.Repository
+	tx    Transactor
 	now   func() time.Time
 }
 
-func NewProgress(tasks domain.Tasks, repo domain.Repository) *Progress {
-	return &Progress{tasks: tasks, repo: repo, now: time.Now}
+func NewProgress(tasks domain.Tasks, repo domain.Repository, tx Transactor) *Progress {
+	return &Progress{tasks: tasks, repo: repo, tx: tx, now: time.Now}
 }
 
 // CheckIn marks the task as done on the entry's day, replacing what was
 // reported for that day before. loc is the user's time zone, where "today" is.
+// The task is locked meanwhile, so a one-off is not completed on two days at
+// once.
 func (p *Progress) CheckIn(
 	ctx context.Context, userID, taskID uuid.UUID, e domain.Entry, loc *time.Location,
+) (domain.CheckIn, error) {
+	var saved domain.CheckIn
+	err := p.tx.InTx(ctx, func(ctx context.Context) error {
+		if err := p.repo.LockTask(ctx, userID, taskID); err != nil {
+			return err
+		}
+		c, err := p.newCheckIn(ctx, userID, taskID, e, calendar.DateOf(p.now().In(loc)))
+		if err != nil {
+			return err
+		}
+		saved, err = p.repo.Save(ctx, c)
+		return err
+	})
+	if err != nil {
+		return domain.CheckIn{}, err
+	}
+	return saved, nil
+}
+
+func (p *Progress) newCheckIn(
+	ctx context.Context, userID, taskID uuid.UUID, e domain.Entry, today calendar.Date,
 ) (domain.CheckIn, error) {
 	task, err := p.tasks.Get(ctx, userID, taskID)
 	if err != nil {
 		return domain.CheckIn{}, err
 	}
-	c, err := domain.NewCheckIn(userID, task, e, calendar.DateOf(p.now().In(loc)))
-	if err != nil {
-		return domain.CheckIn{}, err
+	var existing []domain.CheckIn
+	if task.Kind == domain.OneOffTask {
+		if existing, err = p.repo.List(ctx, userID, domain.Filter{TaskID: taskID}); err != nil {
+			return domain.CheckIn{}, err
+		}
 	}
-	return p.repo.Save(ctx, c)
+	return domain.NewCheckIn(userID, task, e, today, existing)
 }
 
 func (p *Progress) Undo(ctx context.Context, userID, taskID uuid.UUID, date calendar.Date) error {
@@ -54,7 +85,7 @@ func (p *Progress) Week(ctx context.Context, userID uuid.UUID, day calendar.Date
 	if err != nil {
 		return domain.WeekSummary{}, err
 	}
-	// One-off tasks add up every check-in until the end of the week.
+	// A one-off task completed before the week is left out.
 	checkIns, err := p.repo.List(ctx, userID, domain.Filter{To: day.StartOfWeek().AddDays(6)})
 	if err != nil {
 		return domain.WeekSummary{}, err
@@ -114,16 +145,21 @@ func habitScope(tasks []domain.Task) (ids []uuid.UUID, from calendar.Date) {
 	return ids, from.StartOfWeek()
 }
 
-// ScheduleChanged keeps the weekdays a task had when they change, so its past
-// habit weeks are judged by them. Empty weekdays mean the task is not
-// recurring; a change that keeps the weekdays is ignored. The day of the
-// change is in the time zone stored in ctx, or UTC.
-func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before, after calendar.Weekdays) error {
+// ScheduleChanged keeps how a task repeated when that changes, so its past
+// habit weeks are judged by it. A change that keeps the recurrence is
+// ignored. The day of the change is in the time zone stored in ctx, or UTC.
+func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID, before, after domain.Recurrence) error {
 	if before == after {
 		return nil
 	}
 	changedOn := calendar.DateOf(p.now().In(calendar.LocationFrom(ctx)))
-	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Weekdays: before})
+	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Recurrence: before})
+}
+
+// BecameOneOff drops the check-ins of a task that is now one-off: they were
+// done before, and its only check-in is the day it is completed.
+func (p *Progress) BecameOneOff(ctx context.Context, userID, taskID uuid.UUID) error {
+	return p.repo.DeleteForTask(ctx, userID, taskID)
 }
 
 // WithClock makes p read the current time from now, so tests can fix what

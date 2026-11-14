@@ -31,16 +31,16 @@ func TestToProgressTask(t *testing.T) {
 			progressdomain.Task{ID: id, Title: "T", Kind: progressdomain.FixedTask, CreatedAt: createdAt, CreatedOn: createdOn},
 		},
 		"recurring": {
-			taskdomain.RecurringSchedule{Weekdays: days, Duration: time.Hour},
+			taskdomain.RecurringSchedule{TimesPerWeek: 2, Weekdays: days, Duration: time.Hour},
 			progressdomain.Task{
-				ID: id, Title: "T", Kind: progressdomain.RecurringTask, Weekdays: days, TimesPerWeek: 3,
+				ID: id, Title: "T", Kind: progressdomain.RecurringTask, Weekdays: days, TimesPerWeek: 2,
 				CreatedAt: createdAt, CreatedOn: createdOn,
 			},
 		},
 		"one-off": {
-			taskdomain.OneOffSchedule{Duration: 20 * time.Hour, Deadline: deadline},
+			taskdomain.OneOffSchedule{Deadline: deadline},
 			progressdomain.Task{
-				ID: id, Title: "T", Kind: progressdomain.OneOffTask, TotalMinutes: 1200, Deadline: deadline,
+				ID: id, Title: "T", Kind: progressdomain.OneOffTask, Deadline: deadline,
 				CreatedAt: createdAt, CreatedOn: createdOn,
 			},
 		},

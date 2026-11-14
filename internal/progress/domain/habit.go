@@ -18,9 +18,9 @@ type Habit struct {
 }
 
 // HabitWeek is met when the task was done on at least Target days, on any
-// days of the week. Target is the number of weekdays set that week. The week
-// the task was created or its schedule changed never asks for more than was
-// fair then: the days left, or the lower of the old and new counts.
+// days of the week. Target is how many times a week the task was set for. The
+// week the task was created or its schedule changed never asks for more than
+// was fair then: the days left, or the lower of the old and new counts.
 type HabitWeek struct {
 	Start  calendar.Date
 	Target int
@@ -29,6 +29,7 @@ type HabitWeek struct {
 	Days   []HabitDay
 }
 
+// HabitDay is Scheduled on the days the user usually does the task.
 type HabitDay struct {
 	Date      calendar.Date
 	Scheduled bool
@@ -106,11 +107,11 @@ func (b habitBuilder) week(start calendar.Date) HabitWeek {
 	if w, ok := b.weeks[start]; ok {
 		return w
 	}
-	set := b.task.weekdaysOn(start)
-	w := HabitWeek{Start: start, Target: b.task.target(start, set), Days: make([]HabitDay, 0, 7)}
+	r := b.task.recurrenceIn(start)
+	w := HabitWeek{Start: start, Target: b.task.target(start, r.TimesPerWeek), Days: make([]HabitDay, 0, 7)}
 	for i := range 7 {
 		d := start.AddDays(i)
-		day := HabitDay{Date: d, Scheduled: set.Has(d.Weekday()), Done: b.done[d]}
+		day := HabitDay{Date: d, Scheduled: r.Weekdays.Has(d.Weekday()), Done: b.done[d]}
 		if day.Done {
 			w.Done++
 		}
@@ -124,20 +125,21 @@ func (b habitBuilder) week(start calendar.Date) HabitWeek {
 // activeIn reports whether the task existed and was recurring in the week
 // starting on start.
 func (t Task) activeIn(start calendar.Date) bool {
-	return !start.Before(t.CreatedOn.StartOfWeek()) && !t.weekdaysOn(start).IsEmpty()
+	return !start.Before(t.CreatedOn.StartOfWeek()) && t.recurrenceIn(start).TimesPerWeek > 0
 }
 
-// target is how many days the week starting on start asks for, under set.
-func (t Task) target(start calendar.Date, set calendar.Weekdays) int {
-	target := set.Count()
+// target is how many days the week starting on start asks for, when the task
+// was set for times a week.
+func (t Task) target(start calendar.Date, times int) int {
+	target := times
 	if start == t.CreatedOn.StartOfWeek() {
 		target = min(target, daysLeft(start, t.CreatedOn))
 	}
 	if change, ok := t.changeIn(start); ok {
-		if change.Weekdays.IsEmpty() {
+		if change.TimesPerWeek == 0 {
 			target = min(target, daysLeft(start, change.ChangedOn))
 		} else {
-			target = min(target, change.Weekdays.Count())
+			target = min(target, change.TimesPerWeek)
 		}
 	}
 	return target

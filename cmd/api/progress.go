@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -50,11 +49,10 @@ func toProgressTask(t taskdomain.Task) progressdomain.Task {
 		p.Kind = progressdomain.FixedTask
 	case taskdomain.RecurringSchedule:
 		p.Kind = progressdomain.RecurringTask
+		p.TimesPerWeek = s.TimesPerWeek
 		p.Weekdays = s.Weekdays
-		p.TimesPerWeek = s.Weekdays.Count()
 	case taskdomain.OneOffSchedule:
 		p.Kind = progressdomain.OneOffTask
-		p.TotalMinutes = int(s.Duration / time.Minute)
 		p.Deadline = s.Deadline
 	}
 	return p

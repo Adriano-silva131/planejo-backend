@@ -16,12 +16,13 @@ import (
 )
 
 type scheduleModel struct {
-	TaskID    uuid.UUID `gorm:"primaryKey"`
-	UntilWeek time.Time `gorm:"primaryKey"`
-	ChangedOn time.Time
-	UserID    uuid.UUID
-	Weekdays  calendar.Weekdays
-	CreatedAt time.Time
+	TaskID       uuid.UUID `gorm:"primaryKey"`
+	UntilWeek    time.Time `gorm:"primaryKey"`
+	ChangedOn    time.Time
+	UserID       uuid.UUID
+	Weekdays     calendar.Weekdays
+	TimesPerWeek int
+	CreatedAt    time.Time
 }
 
 func (scheduleModel) TableName() string {
@@ -30,7 +31,8 @@ func (scheduleModel) TableName() string {
 
 func (r *Repository) SaveSchedule(ctx context.Context, userID, taskID uuid.UUID, s domain.PastSchedule) error {
 	m := scheduleModel{
-		TaskID: taskID, UntilWeek: s.Until().Time(), ChangedOn: s.ChangedOn.Time(), UserID: userID, Weekdays: s.Weekdays,
+		TaskID: taskID, UntilWeek: s.Until().Time(), ChangedOn: s.ChangedOn.Time(), UserID: userID,
+		Weekdays: s.Weekdays, TimesPerWeek: s.TimesPerWeek,
 	}
 	err := db.Conn(ctx, r.db).Clauses(clause.OnConflict{DoNothing: true}).Create(&m).Error
 	if errors.Is(err, gorm.ErrForeignKeyViolated) {
@@ -51,8 +53,8 @@ func (r *Repository) Schedules(ctx context.Context, userID uuid.UUID) (map[uuid.
 	schedules := map[uuid.UUID][]domain.PastSchedule{}
 	for _, m := range models {
 		schedules[m.TaskID] = append(schedules[m.TaskID], domain.PastSchedule{
-			ChangedOn: calendar.NewDate(m.ChangedOn.Date()),
-			Weekdays:  m.Weekdays,
+			ChangedOn:  calendar.NewDate(m.ChangedOn.Date()),
+			Recurrence: domain.Recurrence{TimesPerWeek: m.TimesPerWeek, Weekdays: m.Weekdays},
 		})
 	}
 	return schedules, nil
