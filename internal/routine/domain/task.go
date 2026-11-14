@@ -45,6 +45,8 @@ type PlannableTask struct {
 	Duration time.Duration
 	Period   calendar.Period
 	Deadline calendar.Date
+	// CreatedOn is the day the task was created in the user's time zone.
+	CreatedOn calendar.Date
 }
 
 // Tasks reads the user's tasks. List returns all of them, the fixed apart

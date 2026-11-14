@@ -74,7 +74,7 @@ func (w *Week) Plan(today calendar.Date, plannable []PlannableTask, sessions []S
 		case t.Kind == RecurringKind:
 			tw.planCheckIns()
 			tw.planRecurring(habits[t.ID])
-		case !p.Completed[t.ID] && len(tw.sessions) == 0:
+		case !t.CreatedOn.After(w.End) && !p.Completed[t.ID] && len(tw.sessions) == 0:
 			w.ToPlace = append(w.ToPlace, tw.toPlace(1, 0))
 		}
 	}

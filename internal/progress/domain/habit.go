@@ -128,6 +128,8 @@ type WeekSchedule struct {
 	Task     Task
 	Target   int
 	Weekdays calendar.Weekdays
+	// Since is the first day of the recurrence active in this week.
+	Since calendar.Date
 }
 
 // ScheduleIn returns how t was set for the week starting on start, or false
@@ -137,7 +139,13 @@ func (t Task) ScheduleIn(start calendar.Date) (WeekSchedule, bool) {
 		return WeekSchedule{}, false
 	}
 	r := t.recurrenceIn(start)
-	return WeekSchedule{Task: t, Target: t.target(start, r.TimesPerWeek), Weekdays: r.Weekdays}, true
+	since := t.CreatedOn
+	for _, previous := range t.PastSchedules {
+		if !start.Before(previous.Until()) && previous.TimesPerWeek == 0 && since.Before(previous.ChangedOn) {
+			since = previous.ChangedOn
+		}
+	}
+	return WeekSchedule{Task: t, Target: t.target(start, r.TimesPerWeek), Weekdays: r.Weekdays, Since: since}, true
 }
 
 // activeIn reports whether the task existed and was recurring in the week

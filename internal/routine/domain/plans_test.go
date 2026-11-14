@@ -225,3 +225,31 @@ func TestPlanOneOffTasks(t *testing.T) {
 		TaskID: report.ID, Title: "Relatório", Area: "Trabalho", Kind: OneOffKind, Deadline: deadline, Remaining: 1,
 	}}, w.ToPlace)
 }
+
+func TestPlanDoesNotMissDaysBeforeTheTaskBecameRecurring(t *testing.T) {
+	aws := recurring(t, "AWS", 3, calendar.Evening, time.Monday, time.Wednesday, time.Friday)
+	aws.habit.Since = nov9.AddDays(4)
+
+	w := plan(saturday, []habitCase{aws}, nil, nil)
+
+	assert.Equal(t, [2]int{3, 1}, toPlace(w)["AWS"], "only Friday was a recurring day")
+}
+
+func TestPlanOneOffOnlyFromItsCreationWeek(t *testing.T) {
+	for _, offset := range []int{0, 3, 6, 7} {
+		t.Run(nov9.AddDays(offset).String(), func(t *testing.T) {
+			task := PlannableTask{
+				ID: uuid.New(), Title: "Relatório", Kind: OneOffKind,
+				CreatedOn: nov9.AddDays(offset),
+			}
+			w := BuildWeek(nov9, nil, nil, []PlannableTask{task}, nil)
+			w.Plan(saturday, []PlannableTask{task}, nil, WeekProgress{})
+			if offset == 7 {
+				assert.Empty(t, w.ToPlace, "the task did not exist in this week")
+			} else {
+				require.Len(t, w.ToPlace, 1)
+				assert.Equal(t, task.ID, w.ToPlace[0].TaskID)
+			}
+		})
+	}
+}

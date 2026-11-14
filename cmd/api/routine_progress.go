@@ -27,7 +27,7 @@ func (r routineProgress) Habits(ctx context.Context, userID uuid.UUID, monday ca
 	habits := make([]routinedomain.Habit, 0, len(schedules))
 	for _, s := range schedules {
 		habits = append(habits, routinedomain.Habit{
-			TaskID: s.Task.ID, Target: s.Target, Weekdays: s.Weekdays, Since: s.Task.CreatedOn,
+			TaskID: s.Task.ID, Target: s.Target, Weekdays: s.Weekdays, Since: s.Since,
 		})
 	}
 	return habits, nil
