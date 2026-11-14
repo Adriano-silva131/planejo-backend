@@ -21,8 +21,9 @@ type Week struct {
 }
 
 type Day struct {
-	Date   calendar.Date
-	Blocks []Block
+	Date           calendar.Date
+	Blocks         []Block
+	PeriodSessions []Session
 }
 
 // Kind is the kind of task a block comes from.
@@ -59,7 +60,7 @@ type occurrenceKey struct {
 // BuildWeek builds the week that contains day. It starts on the Sunday
 // before, whose overnight occurrences end on Monday. Adjustments of dates
 // that are no longer occurrences are ignored, and so are sessions of tasks
-// not in plannable and sessions without a time.
+// not in plannable. Sessions without a time are kept separately per day.
 func BuildWeek(
 	day calendar.Date, fixed []FixedTask, adjustments []Adjustment, plannable []PlannableTask, sessions []Session,
 ) Week {
@@ -136,16 +137,23 @@ func (w *Week) add(offset int, b Block) {
 	}
 }
 
-// placeSessions adds the timed sessions of this week as blocks of their
-// tasks. A session only in a period has no time to take, so it is no block.
+// placeSessions adds timed sessions as blocks and keeps period sessions
+// separately, so they remain visible without taking an overlap layer.
 func (w *Week) placeSessions(plannable []PlannableTask, sessions []Session) {
 	byID := make(map[uuid.UUID]PlannableTask, len(plannable))
 	for _, t := range plannable {
 		byID[t.ID] = t
 	}
 	for _, s := range sessions {
-		if t, ok := byID[s.TaskID]; ok && s.Timed() {
-			w.add(s.Date.DaysSince(w.Start), Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: t.Kind, Start: s.Start, End: s.End})
+		t, ok := byID[s.TaskID]
+		offset := s.Date.DaysSince(w.Start)
+		if !ok || offset < 0 || offset >= len(w.Days) {
+			continue
+		}
+		if s.Timed() {
+			w.add(offset, Block{TaskID: t.ID, Title: t.Title, Area: t.Area, Kind: t.Kind, Start: s.Start, End: s.End})
+		} else {
+			w.Days[offset].PeriodSessions = append(w.Days[offset].PeriodSessions, s)
 		}
 	}
 }

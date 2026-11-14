@@ -69,3 +69,25 @@ func TestSessionsInAPeriodTakeNoLayer(t *testing.T) {
 	assert.NoError(t, s.CheckDates(english.ID, day(0)), "work and lunch are already two layers")
 	assert.NoError(t, s.CheckWeekly(lunch.ID, monday))
 }
+
+func TestBuildWeekKeepsOnlyPeriodSessionsOfKnownTasksInTheWeek(t *testing.T) {
+	gym, report := plannable()
+	inWeek := Session{TaskID: gym.ID, Date: day(2), Period: calendar.Evening}
+	sessions := []Session{
+		inWeek,
+		{TaskID: report.ID, Date: day(2), Start: at(9), End: at(10)},
+		{TaskID: uuid.New(), Date: day(2), Period: calendar.Morning},
+		{TaskID: gym.ID, Date: day(-1), Period: calendar.Morning},
+		{TaskID: gym.ID, Date: day(7), Period: calendar.Morning},
+	}
+
+	w := BuildWeek(monday, nil, nil, []PlannableTask{gym, report}, sessions)
+
+	assert.Equal(t, []Session{inWeek}, w.Days[2].PeriodSessions)
+	assert.Equal(t, []slot{{"Relatório", "09:00", "10:00"}}, slots(w.Days[2]))
+	for i, d := range w.Days {
+		if i != 2 {
+			assert.Empty(t, d.PeriodSessions)
+		}
+	}
+}
