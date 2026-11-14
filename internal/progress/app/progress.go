@@ -125,3 +125,10 @@ func (p *Progress) ScheduleChanged(ctx context.Context, userID, taskID uuid.UUID
 	changedOn := calendar.DateOf(p.now().In(calendar.LocationFrom(ctx)))
 	return p.repo.SaveSchedule(ctx, userID, taskID, domain.PastSchedule{ChangedOn: changedOn, Weekdays: before})
 }
+
+// WithClock makes p read the current time from now, so tests can fix what
+// "today" is.
+func (p *Progress) WithClock(now func() time.Time) *Progress {
+	p.now = now
+	return p
+}
