@@ -72,6 +72,10 @@ func (f fakeTasks) List(_ context.Context, userID uuid.UUID) ([]domain.Task, err
 	return out, nil
 }
 
+// now is the clock of every test server: the dates in these tests sit in the
+// week of 2026-10-26, which is the current week here, whatever day they run.
+var now = time.Date(2026, time.October, 28, 15, 0, 0, 0, time.UTC)
+
 type server struct {
 	t       *testing.T
 	tx      *gorm.DB
@@ -91,7 +95,7 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewProgress(tasks, infra.NewRepository(tx)))
+	Register(router.Authenticated, app.NewProgress(tasks, infra.NewRepository(tx)).WithClock(func() time.Time { return now }))
 	return server{t: t, tx: tx, tasks: tasks, handler: router.Handler}
 }
 
