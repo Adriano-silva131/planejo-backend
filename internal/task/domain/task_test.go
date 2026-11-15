@@ -37,7 +37,7 @@ func gym(t *testing.T) Details {
 			TimesPerWeek: 3,
 			Weekdays:     weekdays(t, time.Monday, time.Wednesday, time.Friday),
 			Duration:     time.Hour,
-			Period:       Morning,
+			Period:       calendar.Morning,
 		},
 	}
 }
@@ -146,7 +146,7 @@ func setRecurringDuration(duration time.Duration) func(*Details) {
 	}
 }
 
-func setRecurringPeriod(period Period) func(*Details) {
+func setRecurringPeriod(period calendar.Period) func(*Details) {
 	return func(d *Details) {
 		d.Schedule = RecurringSchedule{TimesPerWeek: 1, Duration: time.Hour, Period: period}
 	}

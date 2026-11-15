@@ -151,7 +151,7 @@ func TestPlaceSessionShowsInTheWeek(t *testing.T) {
 	r, _ := newRoutine(&fakeRepo{})
 	saturday := monday.AddDays(5)
 
-	s, err := r.PlaceSession(t.Context(), userID, gym.ID, saturday, domain.Placement{Start: 10 * 60})
+	s, err := r.PlaceSession(t.Context(), userID, gym.ID, saturday, domain.Placement{Start: calendar.SomeTime(10 * 60)})
 	require.NoError(t, err)
 	w, err := r.Week(t.Context(), userID, monday)
 	require.NoError(t, err)
@@ -164,8 +164,8 @@ func TestPlaceSessionShowsInTheWeek(t *testing.T) {
 func TestPlaceSessionRejectsFixedAndUnknownTasks(t *testing.T) {
 	r, sessions := newRoutine(&fakeRepo{})
 
-	_, fixed := r.PlaceSession(t.Context(), userID, class.ID, monday, domain.Placement{Start: 8 * 60})
-	_, unknown := r.PlaceSession(t.Context(), userID, uuid.New(), monday, domain.Placement{Start: 8 * 60})
+	_, fixed := r.PlaceSession(t.Context(), userID, class.ID, monday, domain.Placement{Start: calendar.SomeTime(8 * 60)})
+	_, unknown := r.PlaceSession(t.Context(), userID, uuid.New(), monday, domain.Placement{Start: calendar.SomeTime(8 * 60)})
 	_, occurrence := r.Adjust(t.Context(), userID, gym.ID, monday, domain.Change{Skip: true})
 
 	assert.ErrorIs(t, fixed, domain.ErrFixedTaskSession)

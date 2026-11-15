@@ -31,7 +31,7 @@ func TestPlaceSessionRefusesAThirdLayer(t *testing.T) {
 	r, _, tasks := newRoutineWith(repo)
 	tasks.fixed = append(tasks.fixed, dinner)
 
-	_, err := r.PlaceSession(t.Context(), userID, gym.ID, monday, domain.Placement{Start: 19*60 + 30})
+	_, err := r.PlaceSession(t.Context(), userID, gym.ID, monday, domain.Placement{Start: calendar.SomeTime(19*60 + 30)})
 
 	assertOverlap(t, err)
 	assert.Equal(t, 1, repo.locks, "checked under the lock, in a transaction")
@@ -41,7 +41,7 @@ func TestPlaceSessionBesideTwoLayers(t *testing.T) {
 	r, _, tasks := newRoutineWith(&fakeRepo{})
 	tasks.fixed = append(tasks.fixed, dinner)
 
-	_, err := r.PlaceSession(t.Context(), userID, gym.ID, monday, domain.Placement{Start: 20 * 60})
+	_, err := r.PlaceSession(t.Context(), userID, gym.ID, monday, domain.Placement{Start: calendar.SomeTime(20 * 60)})
 
 	assert.NoError(t, err)
 }

@@ -102,12 +102,12 @@ func (m taskModel) schedule() (domain.Schedule, error) {
 			TimesPerWeek: value(m.TimesPerWeek),
 			Weekdays:     m.Weekdays,
 			Duration:     minutes(m.DurationMinutes),
-			Period:       domain.Period(value(m.Period)),
+			Period:       calendar.Period(value(m.Period)),
 		}, nil
 	case domain.OneOff:
 		return domain.OneOffSchedule{
 			Deadline: dateOf(m.Deadline),
-			Period:   domain.Period(value(m.Period)),
+			Period:   calendar.Period(value(m.Period)),
 		}, nil
 	}
 	return nil, fmt.Errorf("task %s: unknown kind %q", m.ID, m.Kind)

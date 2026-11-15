@@ -24,7 +24,7 @@ func Register(api huma.API, routine *app.Routine) {
 	huma.Register(api, huma.Operation{
 		OperationID: "week-routine", Method: http.MethodGet, Path: "/routine", Tags: tags,
 		Summary:     "Rotina da semana",
-		Description: "Os blocos de cada dia: as tarefas fixas, com os ajustes desta semana, e as sessões que o usuário encaixou para recorrentes e pontuais.",
+		Description: "Os blocos de cada dia: as tarefas fixas, com os ajustes desta semana, e as sessões com horário que o usuário encaixou para recorrentes e pontuais. Sessões só por período são retornadas em periodSessions de cada dia, sem virar bloco nem ocupar horário.",
 	}, h.week)
 	huma.Register(api, huma.Operation{
 		OperationID: "adjust-occurrence", Method: http.MethodPut, Path: "/tasks/{id}/occurrences/{date}", Tags: tags,

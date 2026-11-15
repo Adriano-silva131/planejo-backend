@@ -102,7 +102,7 @@ func TestDeleteSessions(t *testing.T) {
 
 func TestDatabaseRejectsSessionsPastMidnight(t *testing.T) {
 	f := newSessionFixture(t)
-	m := sessionModel{TaskID: f.recurring(userA), Date: monday.Time(), UserID: userA, StartMinute: 23 * 60, EndMinute: 60}
+	m := sessionModel{TaskID: f.recurring(userA), Date: monday.Time(), UserID: userA, StartMinute: new(23 * 60), EndMinute: new(60)}
 
 	assert.Error(t, f.tx.Create(&m).Error)
 }

@@ -14,13 +14,15 @@ import (
 	"github.com/Adriano-silva131/planejo-backend/internal/shared/calendar"
 )
 
-// sessionModel is the routine_sessions row. end_minute 1440 is midnight.
+// sessionModel is the routine_sessions row: a time, from start_minute to
+// end_minute (1440 is midnight), or only a period.
 type sessionModel struct {
 	TaskID      uuid.UUID `gorm:"primaryKey"`
 	Date        time.Time `gorm:"primaryKey"`
 	UserID      uuid.UUID
-	StartMinute int
-	EndMinute   int
+	StartMinute *int
+	EndMinute   *int
+	Period      *string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -29,16 +31,36 @@ func (sessionModel) TableName() string {
 	return "routine_sessions"
 }
 
+func toSessionModel(s domain.Session) sessionModel {
+	m := sessionModel{
+		TaskID: s.TaskID, Date: s.Date.Time(), UserID: s.UserID, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+	}
+	if !s.Timed() {
+		period := string(s.Period)
+		m.Period = &period
+		return m
+	}
+	start, end := int(s.Start), int(s.End)
+	m.StartMinute, m.EndMinute = &start, &end
+	return m
+}
+
 func toSessionDomain(m sessionModel) domain.Session {
-	return domain.Session{
+	s := domain.Session{
 		UserID:    m.UserID,
 		TaskID:    m.TaskID,
 		Date:      calendar.NewDate(m.Date.Date()),
-		Start:     calendar.TimeOfDay(m.StartMinute),
-		End:       calendar.TimeOfDay(m.EndMinute),
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
+	if m.Period != nil {
+		s.Period = calendar.Period(*m.Period)
+		return s
+	}
+	if m.StartMinute != nil && m.EndMinute != nil {
+		s.Start, s.End = calendar.TimeOfDay(*m.StartMinute), calendar.TimeOfDay(*m.EndMinute)
+	}
+	return s
 }
 
 type SessionRepository struct {
@@ -54,14 +76,11 @@ func NewSessionRepository(db *gorm.DB) *SessionRepository {
 var sessionUpsert = db.OwnedUpsert{
 	Table:    "routine_sessions",
 	Conflict: []string{"task_id", "date"},
-	Update:   []string{"start_minute", "end_minute", "updated_at"},
+	Update:   []string{"start_minute", "end_minute", "period", "updated_at"},
 }
 
 func (r *SessionRepository) Save(ctx context.Context, s domain.Session) (domain.Session, error) {
-	m := sessionModel{
-		TaskID: s.TaskID, Date: s.Date.Time(), UserID: s.UserID,
-		StartMinute: int(s.Start), EndMinute: int(s.End), CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
-	}
+	m := toSessionModel(s)
 	err := sessionUpsert.Save(ctx, r.db, &m, m.UserID)
 	switch {
 	case errors.Is(err, db.ErrNotOwned), errors.Is(err, gorm.ErrForeignKeyViolated):

@@ -15,8 +15,10 @@ var (
 	ErrNotAnOccurrence  = invalid("not_an_occurrence", "A tarefa não acontece neste dia.")
 	ErrInvalidTimeRange = invalid("adjustment_invalid_time_range", "O início e o fim não podem ser iguais.")
 
-	ErrSessionEndRequired  = invalid("session_end_required", "Informe o fim: tarefa pontual não tem duração.")
-	ErrSessionPastMidnight = invalid("session_past_midnight", "A sessão passa da meia-noite. Escolha um horário mais cedo.")
+	ErrSessionStartRequired  = invalid("session_start_required", "Informe o início ou o período da sessão.")
+	ErrSessionPeriodWithTime = invalid("session_period_with_time", "Escolha um horário ou um período, não os dois.")
+	ErrSessionEndRequired    = invalid("session_end_required", "Informe o fim: tarefa pontual não tem duração.")
+	ErrSessionPastMidnight   = invalid("session_past_midnight", "A sessão passa da meia-noite. Escolha um horário mais cedo.")
 )
 
 // ScheduleOverlapCode is the code of the error of a change that would make
