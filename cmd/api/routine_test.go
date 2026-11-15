@@ -41,7 +41,7 @@ func TestToPlannableTask(t *testing.T) {
 	id := uuid.New()
 	run := taskdomain.Task{ID: id, Details: taskdomain.Details{
 		Title: "Corrida", Area: "Saúde", Priority: taskdomain.Medium,
-		Schedule: taskdomain.RecurringSchedule{TimesPerWeek: 2, Duration: 30 * time.Minute},
+		Schedule: taskdomain.RecurringSchedule{TimesPerWeek: 2, Duration: 30 * time.Minute, Period: calendar.Morning},
 	}}
 	report := taskdomain.Task{ID: id, Details: taskdomain.Details{
 		Title: "Relatório", Area: "Trabalho", Priority: taskdomain.Low,
@@ -52,15 +52,32 @@ func TestToPlannableTask(t *testing.T) {
 		Schedule: taskdomain.FixedSchedule{Weekdays: calendar.Weekdays(1 << time.Monday), Start: 9 * 60, End: 18 * 60},
 	}}
 
-	recurring, ok := toPlannableTask(run)
+	recurring, ok := toPlannableTask(t.Context(), run)
 	require.True(t, ok)
-	oneOff, ok := toPlannableTask(report)
+	oneOff, ok := toPlannableTask(t.Context(), report)
 	require.True(t, ok)
-	_, fixed := toPlannableTask(work)
+	_, fixed := toPlannableTask(t.Context(), work)
 
 	assert.Equal(t, routinedomain.PlannableTask{
 		ID: id, Title: "Corrida", Area: "Saúde", Kind: routinedomain.RecurringKind, Duration: 30 * time.Minute,
+		Period: calendar.Morning,
 	}, recurring)
-	assert.Equal(t, routinedomain.PlannableTask{ID: id, Title: "Relatório", Area: "Trabalho", Kind: routinedomain.OneOffKind}, oneOff)
+	assert.Equal(t, routinedomain.PlannableTask{
+		ID: id, Title: "Relatório", Area: "Trabalho", Kind: routinedomain.OneOffKind,
+		Deadline: calendar.NewDate(2026, time.November, 5),
+	}, oneOff)
 	assert.False(t, fixed, "a fixed task has occurrences, not sessions")
+}
+
+func TestToPlannableTaskUsesCreationDayInUserTimeZone(t *testing.T) {
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	require.NoError(t, err)
+	task := taskdomain.Task{Details: taskdomain.Details{
+		Schedule: taskdomain.OneOffSchedule{Deadline: calendar.NewDate(2026, time.November, 5)},
+	}, CreatedAt: time.Date(2026, time.October, 26, 1, 0, 0, 0, time.UTC)}
+
+	got, ok := toPlannableTask(calendar.WithLocation(t.Context(), loc), task)
+
+	require.True(t, ok)
+	assert.Equal(t, calendar.NewDate(2026, time.October, 25), got.CreatedOn)
 }

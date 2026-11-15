@@ -35,13 +35,18 @@ func (t FixedTask) OccursOn(d calendar.Date) bool {
 
 // PlannableTask is what the routine needs to know about a recurring or
 // one-off task: the user places its sessions in the week. Duration is how long
-// a recurring session lasts; a one-off task has none.
+// a recurring session lasts; a one-off task has none, but has a Deadline.
+// Period is the part of the day the user prefers, which may be empty.
 type PlannableTask struct {
 	ID       uuid.UUID
 	Title    string
 	Area     string
 	Kind     Kind
 	Duration time.Duration
+	Period   calendar.Period
+	Deadline calendar.Date
+	// CreatedOn is the day the task was created in the user's time zone.
+	CreatedOn calendar.Date
 }
 
 // Tasks reads the user's tasks. List returns all of them, the fixed apart

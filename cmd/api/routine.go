@@ -31,7 +31,7 @@ func (r routineTasks) List(
 	for _, t := range tasks {
 		if f, ok := toFixedTask(t); ok {
 			fixed = append(fixed, f)
-		} else if p, ok := toPlannableTask(t); ok {
+		} else if p, ok := toPlannableTask(ctx, t); ok {
 			plannable = append(plannable, p)
 		}
 	}
@@ -54,7 +54,7 @@ func (r routineTasks) GetPlannable(ctx context.Context, userID, id uuid.UUID) (r
 	if err != nil {
 		return routinedomain.PlannableTask{}, err
 	}
-	if p, ok := toPlannableTask(t); ok {
+	if p, ok := toPlannableTask(ctx, t); ok {
 		return p, nil
 	}
 	return routinedomain.PlannableTask{}, routinedomain.ErrFixedTaskSession
@@ -79,13 +79,16 @@ func toFixedTask(t taskdomain.Task) (routinedomain.FixedTask, bool) {
 }
 
 // toPlannableTask maps a recurring or one-off task.
-func toPlannableTask(t taskdomain.Task) (routinedomain.PlannableTask, bool) {
+func toPlannableTask(ctx context.Context, t taskdomain.Task) (routinedomain.PlannableTask, bool) {
 	p := routinedomain.PlannableTask{ID: t.ID, Title: t.Title, Area: t.Area}
+	if !t.CreatedAt.IsZero() {
+		p.CreatedOn = calendar.DateOf(t.CreatedAt.In(calendar.LocationFrom(ctx)))
+	}
 	switch s := t.Schedule.(type) {
 	case taskdomain.RecurringSchedule:
-		p.Kind, p.Duration = routinedomain.RecurringKind, s.Duration
+		p.Kind, p.Duration, p.Period = routinedomain.RecurringKind, s.Duration, s.Period
 	case taskdomain.OneOffSchedule:
-		p.Kind = routinedomain.OneOffKind
+		p.Kind, p.Period, p.Deadline = routinedomain.OneOffKind, s.Period, s.Deadline
 	default:
 		return routinedomain.PlannableTask{}, false
 	}

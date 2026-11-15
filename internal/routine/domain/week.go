@@ -13,16 +13,19 @@ import (
 const EndOfDay calendar.TimeOfDay = 24 * 60
 
 // Week is the routine of one week, Monday to Sunday, built from the fixed
-// tasks, their adjustments and the sessions the user placed that week.
+// tasks, their adjustments and the sessions the user placed that week. Once
+// planned, its days also have plans, and ToPlace has what still has no day.
 type Week struct {
-	Start calendar.Date
-	End   calendar.Date
-	Days  []Day
+	Start   calendar.Date
+	End     calendar.Date
+	Days    []Day
+	ToPlace []ToPlace
 }
 
 type Day struct {
 	Date           calendar.Date
 	Blocks         []Block
+	Plans          []Plan
 	PeriodSessions []Session
 }
 
@@ -38,7 +41,7 @@ const (
 // Block is the part of an occurrence of a fixed task that falls on one day,
 // or a session the user placed. An occurrence that crosses midnight is split
 // in two blocks, one on each day. Adjusted is only set on fixed tasks moved
-// that week.
+// that week, and Done on sessions of tasks checked in that day.
 type Block struct {
 	TaskID   uuid.UUID
 	Title    string
@@ -47,6 +50,7 @@ type Block struct {
 	Start    calendar.TimeOfDay
 	End      calendar.TimeOfDay
 	Adjusted bool
+	Done     bool
 
 	ContinuesFromPreviousDay bool
 	ContinuesNextDay         bool

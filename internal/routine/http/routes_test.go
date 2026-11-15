@@ -95,10 +95,11 @@ func (f fakeTasks) GetPlannable(_ context.Context, userID, id uuid.UUID) (domain
 }
 
 type server struct {
-	t       *testing.T
-	tx      *gorm.DB
-	tasks   fakeTasks
-	handler http.Handler
+	t        *testing.T
+	tx       *gorm.DB
+	tasks    fakeTasks
+	progress *fakeProgress
+	handler  http.Handler
 }
 
 func newServer(t *testing.T) server {
@@ -113,8 +114,12 @@ func newServer(t *testing.T) server {
 		AuthenticatedIPRateLimit: 1000,
 		UserRateLimit:            1000,
 	}, slog.New(slog.DiscardHandler))
-	Register(router.Authenticated, app.NewRoutine(tasks, infra.NewRepository(tx), infra.NewSessionRepository(tx), db.NewTransactor(tx)))
-	return server{t: t, tx: tx, tasks: tasks, handler: router.Handler}
+	progress := &fakeProgress{}
+	routine := app.NewRoutine(app.Stores{
+		Tasks: tasks, Adjustments: infra.NewRepository(tx), Sessions: infra.NewSessionRepository(tx), Progress: progress,
+	}, db.NewTransactor(tx)).WithClock(func() time.Time { return wednesday })
+	Register(router.Authenticated, routine)
+	return server{t: t, tx: tx, tasks: tasks, progress: progress, handler: router.Handler}
 }
 
 // addTask stores a row in tasks, which adjustments reference, and exposes it
@@ -234,8 +239,10 @@ func TestWeekRoutine(t *testing.T) {
 	first, _ := monday["blocks"].([]any)[0].(map[string]any)
 	assert.Equal(t, map[string]any{
 		"taskId": first["taskId"], "title": "Dormir", "area": "Descanso", "taskKind": "fixed", "start": "00:00", "end": "07:00",
-		"adjusted": false, "continuesFromPreviousDay": true, "continuesNextDay": false,
+		"adjusted": false, "done": false, "continuesFromPreviousDay": true, "continuesNextDay": false,
 	}, first)
+	assert.Equal(t, []any{}, monday["plans"])
+	assert.Equal(t, []any{}, week["toPlace"])
 }
 
 func TestPlaceSessionsOnAnyDay(t *testing.T) {

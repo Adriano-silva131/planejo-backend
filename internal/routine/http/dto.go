@@ -87,6 +87,7 @@ type blockBody struct {
 	Start    string `json:"start" example:"09:00"`
 	End      string `json:"end" doc:"24:00 quando continua no dia seguinte ou termina à meia-noite" example:"18:00"`
 	Adjusted bool   `json:"adjusted" doc:"fixed: o horário desta semana difere do padrão da tarefa"`
+	Done     bool   `json:"done" doc:"recurring e one_off: a tarefa tem check-in neste dia; fixed sempre false"`
 
 	ContinuesFromPreviousDay bool `json:"continuesFromPreviousDay" doc:"Começou no dia anterior"`
 	ContinuesNextDay         bool `json:"continuesNextDay" doc:"Termina no dia seguinte"`
@@ -97,40 +98,60 @@ type dayBody struct {
 	Weekday        string        `json:"weekday" example:"monday"`
 	Blocks         []blockBody   `json:"blocks" doc:"Em ordem de início"`
 	PeriodSessions []sessionBody `json:"periodSessions" doc:"Sessões só por período, sem ocupar horário"`
+	Plans          []planBody    `json:"plans" doc:"Recorrentes e pontuais no dia sem horário, em ordem de período (manhã, tarde, noite, sem período) e título"`
 }
 
 type routineWeekBody struct {
-	Start string    `json:"start" format:"date" doc:"Segunda-feira da semana"`
-	End   string    `json:"end" format:"date" doc:"Domingo da semana"`
-	Days  []dayBody `json:"days" doc:"Os 7 dias, de segunda a domingo"`
+	Start   string        `json:"start" format:"date" doc:"Segunda-feira da semana"`
+	End     string        `json:"end" format:"date" doc:"Domingo da semana"`
+	Days    []dayBody     `json:"days" doc:"Os 7 dias, de segunda a domingo"`
+	ToPlace []toPlaceBody `json:"toPlace" doc:"O que ainda não tem dia nesta semana"`
 }
 
 func toWeekBody(w domain.Week) routineWeekBody {
-	b := routineWeekBody{Start: w.Start.String(), End: w.End.String(), Days: make([]dayBody, 0, len(w.Days))}
+	b := routineWeekBody{
+		Start: w.Start.String(), End: w.End.String(),
+		Days: make([]dayBody, 0, len(w.Days)), ToPlace: make([]toPlaceBody, 0, len(w.ToPlace)),
+	}
 	for _, d := range w.Days {
-		day := dayBody{
-			Date:           d.Date.String(),
-			Weekday:        calendar.WeekdayName(d.Date.Weekday()),
-			Blocks:         make([]blockBody, 0, len(d.Blocks)),
-			PeriodSessions: make([]sessionBody, 0, len(d.PeriodSessions)),
-		}
-		for _, bl := range d.Blocks {
-			day.Blocks = append(day.Blocks, blockBody{
-				TaskID:                   bl.TaskID.String(),
-				Title:                    bl.Title,
-				Area:                     bl.Area,
-				TaskKind:                 string(bl.Kind),
-				Start:                    bl.Start.String(),
-				End:                      bl.End.String(),
-				Adjusted:                 bl.Adjusted,
-				ContinuesFromPreviousDay: bl.ContinuesFromPreviousDay,
-				ContinuesNextDay:         bl.ContinuesNextDay,
-			})
-		}
-		for _, s := range d.PeriodSessions {
-			day.PeriodSessions = append(day.PeriodSessions, toSessionBody(s))
-		}
-		b.Days = append(b.Days, day)
+		b.Days = append(b.Days, toDayBody(d))
+	}
+	for _, t := range w.ToPlace {
+		b.ToPlace = append(b.ToPlace, toToPlaceBody(t))
 	}
 	return b
+}
+
+func toDayBody(d domain.Day) dayBody {
+	day := dayBody{
+		Date:           d.Date.String(),
+		Weekday:        calendar.WeekdayName(d.Date.Weekday()),
+		Blocks:         make([]blockBody, 0, len(d.Blocks)),
+		Plans:          make([]planBody, 0, len(d.Plans)),
+		PeriodSessions: make([]sessionBody, 0, len(d.PeriodSessions)),
+	}
+	for _, bl := range d.Blocks {
+		day.Blocks = append(day.Blocks, blockBody{
+			TaskID:                   bl.TaskID.String(),
+			Title:                    bl.Title,
+			Area:                     bl.Area,
+			TaskKind:                 string(bl.Kind),
+			Start:                    bl.Start.String(),
+			End:                      bl.End.String(),
+			Adjusted:                 bl.Adjusted,
+			Done:                     bl.Done,
+			ContinuesFromPreviousDay: bl.ContinuesFromPreviousDay,
+			ContinuesNextDay:         bl.ContinuesNextDay,
+		})
+	}
+	for _, s := range d.PeriodSessions {
+		day.PeriodSessions = append(day.PeriodSessions, toSessionBody(s))
+	}
+	for _, p := range d.Plans {
+		day.Plans = append(day.Plans, planBody{
+			TaskID: p.TaskID.String(), Title: p.Title, Area: p.Area, TaskKind: string(p.Kind),
+			Source: string(p.Source), Period: string(p.Period), Minutes: minutes(p.Duration), Done: p.Done,
+		})
+	}
+	return day
 }

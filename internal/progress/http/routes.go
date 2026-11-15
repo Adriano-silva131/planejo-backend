@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -91,7 +90,7 @@ func (h handler) checkIn(ctx context.Context, in *checkInInput) (*checkInOutput,
 	if err != nil {
 		return nil, err
 	}
-	loc, err := parseTimeZone(in.TimeZone)
+	loc, err := httpx.ParseTimeZone(in.TimeZone)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +184,7 @@ func (h handler) habits(ctx context.Context, in *habitsInput) (*habitsOutput, er
 	if err != nil {
 		return nil, err
 	}
-	loc, err := parseTimeZone(in.TimeZone)
+	loc, err := httpx.ParseTimeZone(in.TimeZone)
 	if err != nil {
 		return nil, err
 	}
@@ -212,19 +211,6 @@ func parseDay(ctx context.Context, rawID, rawDate string) (day, error) {
 		return day{}, err
 	}
 	return day{userID: userID, taskID: taskID, date: date}, nil
-}
-
-// parseTimeZone reads an IANA zone name such as "America/Sao_Paulo". "Local"
-// is refused: it would be the server's zone, not the user's.
-func parseTimeZone(name string) (*time.Location, error) {
-	loc, err := time.LoadLocation(name)
-	if err != nil || name == "" || name == "Local" {
-		return nil, huma.Error422UnprocessableEntity("", &huma.ErrorDetail{
-			Location: "header.Time-Zone",
-			Message:  "Fuso horário inválido; use um nome como America/Sao_Paulo.",
-		})
-	}
-	return loc, nil
 }
 
 // userAndTask returns the authenticated user and the task id from the path.
